@@ -38,3 +38,8 @@ T+0 = 2026-10-04 00:05 (+0800)
 - 修复的 bug：① Astro BASE_URL 无尾斜杠导致全部内链错路径（10 文件统一归一化）；② 技能页共现图空白（内联脚本在 #pair-names 解析前同步执行，挪入 DOMContentLoaded）。
 - 遇到问题：无新增。
 - 下一步：git 提交 → GitHub Pages 部署 → 收尾文档。
+
+## T+1:10 部署与交付完成（01:16）
+- 已完成：GitHub 仓库 Tech--man/ai-job-radar 创建并推送（noreply 邮箱身份）；Pages workflow 部署成功；线上 https://tech--man.github.io/ai-job-radar/ 全页面 200（首页/画像/生成器/报告/简报/方法页）；线上浏览器控制台 0 错误；性能实测 HTML 16.7KB/~1s、echarts gzip 339KB（defer 并行加载，首屏内容先行渲染，满足移动端 <3s）；README/数据字典/免责声明/晨间简报交付；项目记忆已存档。
+- 遇到问题：无新增。
+- 验收对照：数据集 4142≥500 ✓；技能 101≥50 ✓；画像 6≥5 ✓；路线生成器可用（实测）✓；来源可追溯（SOURCE_MANIFEST + salary_raw）✓；溢价有计算逻辑（analyze.skill_premium）✓；薪资缺失显式标注 ✓；代码可运行（全链路刚执行过）✓。
