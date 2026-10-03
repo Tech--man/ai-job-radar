@@ -22,3 +22,6 @@ site/dist/
 __pycache__/
 *.pyc
 .venv/
+
+# hook runtime state
+.mimosa/
