@@ -1,0 +1,12 @@
+---
+import Base from "../layouts/Base.astro";
+import { Content as Briefing } from "../content/briefing.md";
+const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+---
+<Base>
+  <h1 class="text-3xl font-extrabold mb-3">晨间简报</h1>
+  <p class="muted text-sm mb-8">2026-10-05 · 一页读完昨晚的雷达建设与今日信号 · 详细版见<a class="accent" href={B + "report"}>研究报告</a></p>
+  <article class="prose max-w-none">
+    <Briefing />
+  </article>
+</Base>

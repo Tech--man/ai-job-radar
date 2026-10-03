@@ -1,0 +1,54 @@
+---
+const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const nav = [
+  ["总览", ""],
+  ["岗位画像", "roles/llm-app"],
+  ["技能图谱", "skills"],
+  ["薪资", "salary"],
+  ["公司热度", "companies"],
+  ["路线生成器", "radar"],
+  ["研究报告", "report"],
+  ["晨间简报", "briefing"],
+  ["方法与来源", "about"],
+];
+const path = Astro.url.pathname;
+function isActive(href: string) {
+  const full = B + href;
+  if (href === "") return path === B || path === B.slice(0, -1) + "/";
+  return path.startsWith(full) || path.startsWith(full.replace(/\/$/, ""));
+}
+---
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="AI 职业行情雷达：基于公开数据的 AI 岗位需求、技能溢价、薪资区间与转型路线生成器" />
+    <title>AI 职业行情雷达 · AI Job Radar</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>" />
+  </head>
+  <body class="min-h-screen antialiased">
+    <header class="sticky top-0 z-50 backdrop-blur bg-[#0b1020]/85 border-b border-white/10">
+      <nav class="mx-auto max-w-6xl px-4 h-14 flex items-center gap-1 overflow-x-auto whitespace-nowrap text-sm">
+        <a href={B} class="font-bold mr-2 shrink-0">📡 AI 行情雷达</a>
+        {nav.map(([label, href]) => (
+          <a href={B + href}
+             class={`px-2.5 py-1.5 rounded-lg shrink-0 ${isActive(href) ? "bg-white/10 text-white" : "text-[var(--muted)] hover:text-white"}`}>{label}</a>
+        ))}
+      </nav>
+    </header>
+    <main class="mx-auto max-w-6xl px-4 py-8">
+      <slot />
+    </main>
+    <footer class="border-t border-white/10 mt-16">
+      <div class="mx-auto max-w-6xl px-4 py-8 text-xs muted space-y-2">
+        <p>数据来源：Hacker News「Who is hiring?」（Algolia API）、RemoteOK API、WeWorkRemotely RSS、GitHub/arXiv/Hugging Face 公开 API。抓取时间 2026-10-04，遵守各来源条款。</p>
+        <p>薪资来自帖子自述区间的解析，仅覆盖约 1/4 样本；缺失即标注，不插补、不编造。本站为研究性 MVP，不构成求职或招聘建议。</p>
+        <p><a class="accent" href={B + "about"}>方法论与免责声明</a> · Pipeline 与数据集见 GitHub 仓库 · Built with Astro + Tailwind + ECharts</p>
+      </div>
+    </footer>
+  </body>
+</html>
+<style is:global>
+  @import "../styles/global.css";
+</style>

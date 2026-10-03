@@ -1,0 +1,56 @@
+---
+import Base from "../layouts/Base.astro";
+import companies from "../data/companies.json";
+import overview from "../data/overview.json";
+
+const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const zh = (rid) => overview.role_distribution.find((x) => x.role === rid)?.name_zh ?? ({ "ml-research": "ML 研究", other: "通用" })[rid] ?? rid;
+const top = companies.companies.slice(0, 30);
+---
+<Base>
+  <h1 class="text-3xl font-extrabold mb-3">公司热度</h1>
+  <p class="muted max-w-3xl leading-relaxed mb-8">
+    口径：AI 岗位帖中出现 ≥3 次的公司（按帖次数计，含跨月重复招聘——持续数月出现本身就是招聘强度的信号）。
+    公司名来自帖子自述的启发式抽取与归一，可能存在残余噪声（如同一公司多种写法未合并）。
+  </p>
+
+  <section class="card p-5 mb-8">
+    <h2 class="font-bold mb-3">Top 30（帖次数）</h2>
+    <div id="chart-companies" class="h-[560px]"></div>
+  </section>
+
+  <section class="card p-5 overflow-x-auto">
+    <h2 class="font-bold mb-3">明细（含主要岗位类型）</h2>
+    <table class="data">
+      <thead><tr><th>#</th><th>公司</th><th>帖次数</th><th>主要招聘方向</th></tr></thead>
+      <tbody>
+        {companies.companies.map((c, i) => (
+          <tr>
+            <td class="num muted">{i + 1}</td>
+            <td>{c.company}{c.is_bigtech_listed && <span class="badge badge-mute ml-2">大厂名单</span>}</td>
+            <td class="num">{c.n}</td>
+            <td class="muted">{c.top_roles.map(([r, n]) => `${zh(r)} ${n}`).join(" · ")}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+</Base>
+
+<script src={B + "echarts.min.js"} defer></script>
+<script define:vars={{ top }}>
+  window.addEventListener("DOMContentLoaded", () => {
+    if (!window.echarts) return;
+    const c = echarts.init(document.getElementById("chart-companies"));
+    c.setOption({
+      textStyle: { color: "#c9d6f2" },
+      grid: { left: 8, right: 44, top: 8, bottom: 8, containLabel: true },
+      xAxis: { type: "value", splitLine: { show: false }, axisLabel: { color: "#8ea0c4" } },
+      yAxis: { type: "category", data: top.map((x) => x.company).reverse(), axisLabel: { color: "#c9d6f2", fontSize: 11 } },
+      tooltip: {},
+      series: [{ type: "bar", data: top.map((x) => x.n).reverse(), itemStyle: { color: "#5b8cff", borderRadius: 4 }, barMaxWidth: 14,
+        label: { show: true, position: "right", color: "#8ea0c4", fontSize: 10 } }],
+    });
+    window.addEventListener("resize", () => c.resize());
+  });
+</script>

@@ -1,0 +1,144 @@
+---
+import Base from "../layouts/Base.astro";
+import overview from "../data/overview.json";
+import trend from "../data/trend.json";
+import salary from "../data/salary.json";
+import skills from "../data/skills.json";
+
+const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const src = overview.built_from;
+const months = src.months;
+const kpis = [
+  { v: src.ai_posts.toLocaleString(), l: "AI 相关岗位帖" },
+  { v: src.salary_posts.toLocaleString(), l: "含真实薪资区间" },
+  { v: skills.skills.length, l: "命中技能项" },
+  { v: `${months[0]} → ${months[1]}`, l: "覆盖月份（HN 月度帖）" },
+];
+const roleData = overview.role_distribution.filter((r) => r.n > 0);
+const up = skills.skills.filter((s) => s.delta_pct != null).slice(0, 6);
+const down = skills.skills.filter((s) => s.delta_pct != null).slice(-4).reverse();
+
+function k(v: number) {
+  return "$" + Math.round(v / 1000) + "k";
+}
+---
+<Base>
+  <section class="mb-10">
+    <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight">AI 职业行情雷达</h1>
+    <p class="muted mt-3 max-w-3xl leading-relaxed">
+      用公开数据回答四个问题：AI 岗位到底在招什么？哪些技能有真溢价、哪些是噪音？
+      谁在密集招人？以及——从你的背景出发，最短转型路径长什么样。
+      本期语料 {src.total_posts.toLocaleString()} 条岗位帖（{Object.entries(src.sources).map(([s, n]) => `${s} ${n}`).join(" / ")}）。
+    </p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+      {kpis.map((kpi) => (
+        <div class="card p-4">
+          <div class="text-xl md:text-2xl font-bold num">{kpi.v}</div>
+          <div class="muted text-xs mt-1">{kpi.l}</div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="grid md:grid-cols-2 gap-6 mb-10">
+    <div class="card p-5">
+      <h2 class="font-bold mb-1">岗位分布</h2>
+      <p class="muted text-xs mb-3">主分类口径；RAG 等组合型岗位见画像页（多标签口径）</p>
+      <div id="chart-roles" class="h-72"></div>
+    </div>
+    <div class="card p-5">
+      <h2 class="font-bold mb-1">月度趋势（HN Who is hiring）</h2>
+      <p class="muted text-xs mb-3">全量帖子 vs AI 相关帖子</p>
+      <div id="chart-trend" class="h-72"></div>
+    </div>
+  </section>
+
+  <section class="grid md:grid-cols-2 gap-6 mb-10">
+    <div class="card p-5">
+      <h2 class="font-bold mb-3">🔥 技能溢价 Top（有真实薪资样本）</h2>
+      <div class="flex flex-wrap gap-2">
+        {up.map((s) => (
+          <span class="badge badge-up">{s.name_zh} +{s.delta_pct}% <span class="muted">n={s.n_with}</span></span>
+        ))}
+      </div>
+      <h2 class="font-bold mt-6 mb-3">🧊 溢价垫底（常出现在低价岗位）</h2>
+      <div class="flex flex-wrap gap-2">
+        {down.map((s) => (
+          <span class="badge badge-down">{s.name_zh} {s.delta_pct}% <span class="muted">n={s.n_with}</span></span>
+        ))}
+      </div>
+      <p class="muted text-xs mt-4">溢价 = 有该技能岗位的薪资中位数 − 同池无该技能岗位中位数；n 为样本数，口径见<a class="accent" href={B + "about"}>方法论</a>。</p>
+    </div>
+    <div class="card p-5">
+      <h2 class="font-bold mb-3">薪资中位数（按岗位）</h2>
+      <table class="data">
+        <thead><tr><th>岗位</th><th>年薪中位（USD）</th><th>样本</th><th>覆盖率</th></tr></thead>
+        <tbody>
+          {Object.entries(salary.by_role).filter(([rid, r]) => r.median_mid).sort((a, b) => b[1].median_mid - a[1].median_mid).map(([rid, r]) => (
+            <tr>
+              <td>{overview.role_distribution.find((x) => x.role === rid)?.name_zh ?? rid}</td>
+              <td class="num">{k(r.median_mid)}<span class="muted text-xs">（{k(r.median_min)}–{k(r.median_max)}）</span></td>
+              <td class="num">{r.n}</td>
+              <td class="num">{r.salary_available_share}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="muted text-xs mt-3">n&lt;8 的岗位不显示中位数（显式缺失）。完整口径见<a class="accent" href={B + "salary"}>薪资页</a>。</p>
+    </div>
+  </section>
+
+  <section class="card p-5 mb-10">
+    <h2 class="font-bold mb-3">高频技能 Top 15（全部 {skills.skills.length} 项见技能图谱）</h2>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-x-6">
+      {skills.skills.slice(0, 15).map((s) => (
+        <div class="flex justify-between border-b border-white/5 py-1.5 text-sm">
+          <span>{s.name_zh}</span>
+          <span class="num muted">{s.freq_pct}%{s.delta_pct != null ? <span class={`ml-2 ${s.delta_pct > 5 ? "text-emerald-400" : s.delta_pct < -5 ? "text-rose-400" : ""}`}>{s.delta_pct > 0 ? "+" : ""}{s.delta_pct}%</span> : <span class="ml-2 missing">溢价样本不足</span>}</span>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="grid md:grid-cols-3 gap-4">
+    <a class="card p-5 hover:border-white/30" href={B + "roles/llm-app"}>
+      <div class="font-bold mb-1">岗位画像 × 6</div>
+      <p class="muted text-sm">每个岗位：要什么技能、薪资、远程比例、公司、与相邻岗位的重合度。</p>
+    </a>
+    <a class="card p-5 hover:border-white/30" href={B + "radar"}>
+      <div class="font-bold mb-1">转型路线生成器</div>
+      <p class="muted text-sm">选背景与目标岗位 → 缺口分析、8 周计划、作品集、简历关键词与面试题。</p>
+    </a>
+    <a class="card p-5 hover:border-white/30" href={B + "report"}>
+      <div class="font-bold mb-1">研究报告</div>
+      <p class="muted text-sm">技能溢价、噪音技能、岗位重合度与真实机会的完整分析。</p>
+    </a>
+  </section>
+</Base>
+
+<script src={B + "echarts.min.js"} defer></script>
+<script define:vars={{ roleData, trend }}>
+  window.addEventListener("DOMContentLoaded", () => {
+    if (!window.echarts) return;
+    const dark = { textStyle: { color: "#c9d6f2" } };
+    const r1 = echarts.init(document.getElementById("chart-roles"));
+    r1.setOption({ ...dark, grid: { left: 8, right: 30, top: 8, bottom: 8, containLabel: true },
+      xAxis: { type: "value", splitLine: { show: false }, axisLabel: { color: "#8ea0c4" } },
+      yAxis: { type: "category", data: roleData.map((r) => r.name_zh).reverse(), axisLabel: { color: "#c9d6f2", fontSize: 11 } },
+      tooltip: {},
+      series: [{ type: "bar", data: roleData.map((r) => r.n).reverse(), itemStyle: { color: "#5b8cff", borderRadius: 4 }, barMaxWidth: 14,
+        label: { show: true, position: "right", color: "#8ea0c4", fontSize: 10 } }] });
+    const r2 = echarts.init(document.getElementById("chart-trend"));
+    r2.setOption({ ...dark, grid: { left: 8, right: 8, top: 28, bottom: 8, containLabel: true },
+      legend: { data: ["全量帖子", "AI 相关"], textStyle: { color: "#8ea0c4" }, top: 0 },
+      xAxis: { type: "category", data: trend.map((t) => t.month.slice(2)), axisLabel: { color: "#8ea0c4", fontSize: 10 } },
+      yAxis: { type: "value", splitLine: { lineStyle: { color: "rgba(120,140,190,.12)" } }, axisLabel: { color: "#8ea0c4" } },
+      tooltip: { trigger: "axis" },
+      series: [
+        { name: "全量帖子", type: "line", smooth: true, data: trend.map((t) => t.posts), itemStyle: { color: "#8ea0c4" }, showSymbol: false },
+        { name: "AI 相关", type: "line", smooth: true, data: trend.map((t) => t.ai_posts), areaStyle: { opacity: 0.15 }, itemStyle: { color: "#35d0ba" }, showSymbol: false },
+      ] });
+    const resize = () => { r1.resize(); r2.resize(); };
+    window.addEventListener("resize", resize);
+  });
+</script>

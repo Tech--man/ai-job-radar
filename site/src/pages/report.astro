@@ -1,0 +1,12 @@
+---
+import Base from "../layouts/Base.astro";
+import { Content as Report } from "../content/report.md";
+const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+---
+<Base>
+  <h1 class="text-3xl font-extrabold mb-3">研究报告</h1>
+  <p class="muted text-sm mb-8">2026-10 快照 · 全部数字可由仓库 pipeline 复现 · 口径见<a class="accent" href={B + "about"}>方法与来源</a></p>
+  <article class="prose max-w-none">
+    <Report />
+  </article>
+</Base>

@@ -1,0 +1,74 @@
+---
+import Base from "../layouts/Base.astro";
+const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+---
+<Base>
+  <h1 class="text-3xl font-extrabold mb-6">方法、数据来源与免责声明</h1>
+
+  <section class="card p-5 mb-6">
+    <h2 class="font-bold mb-2">一句话方法论</h2>
+    <p class="text-sm leading-relaxed">
+      抓取公开岗位帖（HN「Who is hiring?」13 期 + RemoteOK + WeWorkRemotely）→ 规则清洗与去重 →
+      正则技能字典抽取（101 项）→ 关键词分类到 10 类岗位（含 AI 相关性门槛）→
+      自述薪资区间解析（无披露即缺失）→ 频次/共现/溢价/重合度统计 → 静态站点呈现。
+      全链路可在仓库 <code>pipeline/</code> 一键复现，原始数据与溯源清单落盘。
+    </p>
+  </section>
+
+  <section class="card p-5 mb-6">
+    <h2 class="font-bold mb-2">数据来源（均为公开合规渠道）</h2>
+    <div class="overflow-x-auto">
+      <table class="data">
+        <thead><tr><th>来源</th><th>方式</th><th>用途</th><th>条款遵守</th></tr></thead>
+        <tbody>
+          <tr><td>Hacker News「Ask HN: Who is hiring?」</td><td>Algolia 公开 API（2025-10 → 2026-10 共 13 期）</td><td>岗位主语料（3985 帖）与月度趋势</td><td>公开 API；不采集作者字段；仅顶层帖文本</td></tr>
+          <tr><td>RemoteOK</td><td>官方 API（/api，单次拉取）</td><td>远程 AI 岗补充 + 结构化薪资（17 条）</td><td>遵守其 API 使用条款，无高频轮询</td></tr>
+          <tr><td>We Work Remotely</td><td>公开 RSS（4 类目 81 条）</td><td>远程岗补充</td><td>公开 RSS，单次抓取</td></tr>
+          <tr><td>GitHub / arXiv / Hugging Face</td><td>公开 API（生态热度佐证）</td><td>开源生态与研究热度参考</td><td>公开 API 限额内使用</td></tr>
+          <tr><td>Stack Overflow Survey / BLS / O*NET</td><td>未直接入库</td><td>报告交叉引用</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted text-xs mt-2">完整溯源（URL、抓取时间、记录数、条款说明）见仓库 <code>data/raw/SOURCE_MANIFEST.json</code>。</p>
+  </section>
+
+  <section class="card p-5 mb-6">
+    <h2 class="font-bold mb-2">关键口径定义</h2>
+    <ul class="text-sm list-disc pl-5 space-y-2">
+      <li><b>AI 相关岗位</b>：帖子标题或正文命中 AI 门槛关键词（LLM/GPT/agent/AI 等，整词匹配），且至少分类到任一岗位族得分 ≥ 3。未达门槛标记 non-ai。</li>
+      <li><b>技能出现率</b>：正则字典（含别名，见 <code>pipeline/skills_dict.py</code>，可逐条溯源）在帖文本中的命中比例。规则抽取存在漏检/误检，读数看趋势而非绝对值。</li>
+      <li><b>技能溢价</b>：在同池（AI 岗且有解析薪资）内，含该技能帖的薪资中位数 − 不含该技能帖的中位数，相对值以 % 计。n&lt;8 不计算。<b>相关 ≠ 因果</b>：高溢价技能从业者往往也在大厂/高成本城市，存在辛普森效应。</li>
+      <li><b>薪资解析</b>：仅解析带货币标识的区间（$150k–$180k、€90k 等）；"150-200" 这类不带货币的写法不解析；裸 100–999 数值按「千」惯例解释并标记 assumed-k；时薪按 1750h/年、月薪按 ×12 折算；超出 2.5 万–90 万美元/年合理域的丢弃。约 3/4 帖子无薪资 → 全部标注缺失。</li>
+      <li><b>画像岗位成员</b>：主分类或多标签（次分类得分 ≥ 主得分 60%）命中。RAG 等组合型岗位依赖多标签口径。</li>
+      <li><b>公司热度</b>：公司名启发式抽取 + 归一（去后缀），按帖次数计，含跨月重复出现。</li>
+    </ul>
+  </section>
+
+  <section class="card p-5 mb-6">
+    <h2 class="font-bold mb-2">已知局限</h2>
+    <ul class="text-sm list-disc pl-5 space-y-2">
+      <li>样本偏英文技术社区（HN 为主），对中文市场、传统行业 AI 岗位覆盖不足；RemoteOK 本期 API 仅返回约百条。</li>
+      <li>薪资披露有自选择偏差：披露者常为透明文化公司或高竞争岗位。</li>
+      <li>分类与抽取均为规则方法，未用模型；个别帖子会被分入「通用 AI/其他」。</li>
+      <li>转型路线（8 周计划/作品集/面试题）为<b>策划内容</b>：技能优先级由数据驱动排序，但计划本身非统计数据，请按个人基础调整。</li>
+      <li>静态汇率为粗略折算；不含股票期权；不区分总包结构。</li>
+    </ul>
+  </section>
+
+  <section class="card p-5 mb-6">
+    <h2 class="font-bold mb-2">复现步骤</h2>
+    <pre class="text-xs bg-black/30 rounded-lg p-4 overflow-x-auto leading-relaxed">cd pipeline
+python3 fetch_hn.py && python3 fetch_remoteok.py && python3 fetch_wwr.py && python3 fetch_aux.py
+python3 build_db.py && python3 analyze.py && python3 export_web.py && python3 fetch_echarts.py
+cd ../site && npm install && npm run build   # 产物在 site/dist/</pre>
+  </section>
+
+  <section class="card p-5">
+    <h2 class="font-bold mb-2">免责声明</h2>
+    <p class="text-sm leading-relaxed">
+      本项目为个人研究性 MVP，仅供学习参考，不构成求职、招聘、投资建议。所有岗位内容版权归原作者与发布平台所有；
+      数据仅以聚合统计形式呈现，不存储作者个人身份信息。若你是数据来源方并希望退出本数据集，请提 issue 即可移除。
+      软件按「现状」提供，无任何担保。
+    </p>
+  </section>
+</Base>

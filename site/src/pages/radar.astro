@@ -1,0 +1,215 @@
+---
+import Base from "../layouts/Base.astro";
+import roadmaps from "../data/roadmaps.json";
+import skillsMetaRaw from "../data/skills_meta.json";
+import skillsData from "../data/skills.json";
+
+const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const roles = Object.keys(roadmaps.routes);
+const roleNames = {
+  "llm-app": "LLM 应用工程师", "agent": "Agent 工程师", "rag": "RAG 工程师",
+  "mlops": "AI Infra / MLOps", "ai-pm": "AI 产品经理", "data-eng": "数据工程师（AI）",
+};
+const skillMeta = {};
+for (const s of skillsMetaRaw.skills) skillMeta[s.id] = s;
+const freq = {};
+for (const s of skillsData.skills) freq[s.id] = s.freq_pct;
+const payload = { routes: roadmaps.routes, backgrounds: roadmaps.backgrounds, roles, roleNames, skillMeta, freq };
+
+// 服务端把「已掌握」的技能 id 编成初始勾选（背景预设），交互由前端脚本完成
+const bgEntries = Object.entries(roadmaps.backgrounds);
+---
+<Base>
+  <h1 class="text-3xl font-extrabold mb-3">转型路线生成器</h1>
+  <p class="muted max-w-3xl leading-relaxed mb-8">
+    三步：选当前背景 → 勾选已掌握技能 → 选目标岗位。输出缺口分析、8 周计划、作品集、
+    简历关键词与面试题，可一键下载 Markdown。技能优先级来自<a class="accent" href={B + "skills"}>本数据集的频次与溢价</a>，
+    学习计划为策划内容（公开免费资源），不代表招聘方官方要求。
+  </p>
+
+  <section class="card p-5 mb-6">
+    <h2 class="font-bold mb-3">① 当前背景</h2>
+    <div id="bg-list" class="flex flex-wrap gap-2">
+      {bgEntries.map(([id, bg]) => (
+        <button class="chip" data-bg={id} type="button">{bg.label}</button>
+      ))}
+    </div>
+    <h2 class="font-bold mt-6 mb-1">② 已掌握技能 <span class="muted text-xs font-normal">（选背景后自动勾选，可增删）</span></h2>
+    <div id="skill-list" class="flex flex-wrap gap-1.5 mt-2 max-h-64 overflow-y-auto"></div>
+    <h2 class="font-bold mt-6 mb-3">③ 目标岗位</h2>
+    <div id="role-list" class="flex flex-wrap gap-2">
+      {roles.map((r) => <button class="chip" data-role={r} type="button">{roleNames[r]}</button>)}
+    </div>
+    <div class="mt-6 flex flex-wrap items-center gap-3">
+      <button id="gen" class="px-5 py-2.5 rounded-lg bg-[var(--accent)] text-[#06122e] font-bold" type="button">生成我的转型路线</button>
+      <button id="dl" class="px-4 py-2.5 rounded-lg border border-white/20 text-sm hidden" type="button">下载 Markdown</button>
+      <span id="hint" class="muted text-xs"></span>
+    </div>
+  </section>
+
+  <div id="output" class="hidden space-y-6"></div>
+</Base>
+
+<script type="application/json" id="radar-data" set:html={JSON.stringify(payload)} />
+<script>
+  const data = JSON.parse(document.getElementById("radar-data").textContent);
+  const state = { bg: null, role: null, skills: new Set() };
+  const $ = (s) => document.querySelector(s);
+  const skillList = $("#skill-list");
+
+  function zh(id) { return data.skillMeta[id]?.name_zh ?? id; }
+  function allSkillIds() { return Object.keys(data.skillMeta); }
+
+  function renderSkills() {
+    skillList.innerHTML = "";
+    for (const id of allSkillIds()) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip" + (state.skills.has(id) ? " on" : "");
+      b.textContent = zh(id);
+      b.dataset.sid = id;
+      b.onclick = () => { state.skills.has(id) ? state.skills.delete(id) : state.skills.add(id); renderSkills(); };
+      skillList.appendChild(b);
+    }
+  }
+  document.querySelectorAll("#bg-list .chip").forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll("#bg-list .chip").forEach((x) => x.classList.remove("on"));
+      btn.classList.add("on");
+      state.bg = btn.dataset.bg;
+      state.skills = new Set(data.backgrounds[state.bg].base_skills);
+      renderSkills();
+    };
+  });
+  document.querySelectorAll("#role-list .chip").forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll("#role-list .chip").forEach((x) => x.classList.remove("on"));
+      btn.classList.add("on");
+      state.role = btn.dataset.role;
+    };
+  });
+  // URL 预选岗位（来自画像页入口）
+  const presetRole = new URLSearchParams(location.search).get("role");
+  if (presetRole && data.roles.includes(presetRole)) {
+    const btn = document.querySelector(`#role-list .chip[data-role="${presetRole}"]`);
+    if (btn) btn.click();
+  }
+
+  function weeksFor(skillId, route) {
+    const hits = [];
+    const needles = [data.skillMeta[skillId]?.name_en?.toLowerCase(), data.skillMeta[skillId]?.name_zh?.toLowerCase()]
+      .filter(Boolean).map((s) => s.split("/")[0].split("（")[0]);
+    for (const w of route.weeks) {
+      const text = (w.theme + " " + w.goals.join(" ") + " " + w.deliverable).toLowerCase();
+      if (needles.some((n) => n.length > 2 && text.includes(n))) hits.push(w.week);
+    }
+    return hits;
+  }
+
+  function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+  function generate() {
+    if (!state.bg || !state.role) {
+      $("#hint").textContent = "请先选择背景与目标岗位（技能可留空，默认按背景预设）。";
+      return;
+    }
+    const route = data.routes[state.role];
+    const bg = data.backgrounds[state.bg];
+    const have = state.skills;
+    const missing = route.core_skills.filter((s) => !have.has(s))
+      .sort((a, b) => (data.freq[b] ?? 0) - (data.freq[a] ?? 0));
+    const ready = route.core_skills.filter((s) => have.has(s));
+    const bonus = [...have].filter((s) => !route.core_skills.includes(s) && !route.nice_to_have.includes(s));
+    const nice = route.nice_to_have.filter((s) => !have.has(s));
+
+    const gap0 = missing.slice(0, 4).map((s) => {
+      const wks = weeksFor(s, route);
+      return `<li><b>${esc(zh(s))}</b><span class="muted">（岗位需求率 ${data.freq[s] ?? "?"}%）</span>${wks.length ? ` → 重点看 W${wks.join("、W")}` : ""}</li>`;
+    }).join("");
+
+    const html = `
+      <section class="card p-5">
+        <h2 class="font-bold text-lg mb-2">缺口分析 · ${bg.label} → ${data.roleNames[state.role]}</h2>
+        <p class="muted text-sm mb-3">${esc(route.pitch)}</p>
+        <div class="grid md:grid-cols-3 gap-4 text-sm">
+          <div><div class="muted mb-1">✅ 已具备（核心 ${ready.length}/${route.core_skills.length}）</div>
+            ${ready.length ? ready.map((s) => `<span class="badge badge-up mr-1 mb-1">${esc(zh(s))}</span>`).join("") : '<span class="muted">暂无——正好从零规划</span>'}</div>
+          <div><div class="muted mb-1">🎯 需要补（按数据热度排序）</div>
+            ${missing.length ? missing.map((s) => `<span class="badge mr-1 mb-1">${esc(zh(s))}</span>`).join("") : '<span class="badge badge-up">核心技能已全覆盖，直接冲面试</span>'}</div>
+          <div><div class="muted mb-1">➕ 加分项（可选）</div>
+            ${nice.map((s) => `<span class="badge badge-mute mr-1 mb-1">${esc(zh(s))}</span>`).join("") || '<span class="muted">—</span>'}</div>
+        </div>
+        ${missing.length ? `<h3 class="font-bold mt-4 mb-1">第 0 周补差建议（你的 Top 缺口）</h3><ol class="list-decimal pl-5 space-y-1 text-sm">${gap0}</ol>` : ""}
+      </section>
+
+      <section class="card p-5">
+        <h2 class="font-bold text-lg mb-3">8 周学习计划</h2>
+        <div class="space-y-3">
+          ${route.weeks.map((w) => `
+            <div class="border-l-2 border-[var(--accent)] pl-4 py-1">
+              <div class="font-semibold">W${w.week} · ${esc(w.theme)}</div>
+              <ul class="muted text-sm list-disc pl-5 mt-1 space-y-0.5">${w.goals.map((g) => `<li>${esc(g)}</li>`).join("")}</ul>
+              <div class="text-sm mt-1">📦 交付物：${esc(w.deliverable)}</div>
+              <div class="muted text-xs mt-0.5">📚 ${w.resources.map(esc).join(" · ")}</div>
+            </div>`).join("")}
+        </div>
+      </section>
+
+      <section class="card p-5">
+        <h2 class="font-bold text-lg mb-3">作品集项目（3 个，覆盖核心技能）</h2>
+        <div class="grid md:grid-cols-3 gap-4">
+          ${route.projects.map((pr) => `
+            <div class="border border-white/10 rounded-xl p-4">
+              <div class="font-semibold text-sm mb-1">${esc(pr.name)}</div>
+              <p class="muted text-sm">${esc(pr.desc)}</p>
+              <div class="mt-2">${pr.skills.map((s) => `<span class="badge badge-mute mr-1">${esc(zh(s))}</span>`).join("")}</div>
+            </div>`).join("")}
+        </div>
+      </section>
+
+      <section class="grid md:grid-cols-2 gap-6">
+        <div class="card p-5">
+          <h2 class="font-bold mb-2">简历关键词（对齐本站画像高频技能）</h2>
+          <div class="flex flex-wrap gap-2">${route.resume_keywords.map((k) => `<span class="badge badge-up">${esc(k)}</span>`).join("")}</div>
+        </div>
+        <div class="card p-5">
+          <h2 class="font-bold mb-2">面试题库</h2>
+          ${["technical", "system_design", "behavioral"].map((cat) => {
+            const label = { technical: "技术面", system_design: "系统设计", behavioral: "行为面" }[cat];
+            const qs = route.interview[cat] || [];
+            return `<div class="mb-3"><div class="muted text-sm mb-1">${label}</div><ul class="text-sm list-decimal pl-5 space-y-1">${qs.map((q) => `<li>${esc(q)}</li>`).join("")}</ul></div>`;
+          }).join("")}
+        </div>
+      </section>`;
+
+    $("#output").innerHTML = html;
+    $("#output").classList.remove("hidden");
+    $("#dl").classList.remove("hidden");
+    $("#hint").textContent = "已生成。计划中的周次建议为策划内容，请按自身节奏调整。";
+    $("#output").scrollIntoView({ behavior: "smooth" });
+
+    // Markdown 导出
+    const md = [
+      `# 转型路线：${bg.label} → ${data.roleNames[state.role]}`,
+      ``, `> 由 AI 职业行情雷达生成（数据快照 2026-10-04）。技能优先级基于公开岗位数据分析；学习计划为策划内容。`,
+      ``, `## 缺口分析`,
+      `- 已具备核心：${ready.map((s) => zh(s)).join("、") || "无"}`,
+      `- 需补（按热度）：${missing.map((s) => zh(s)).join("、") || "无"}`,
+      `- 加分项：${nice.map((s) => zh(s)).join("、") || "—"}`,
+      ``, `## 8 周学习计划`,
+      ...route.weeks.flatMap((w) => [`### W${w.week} ${w.theme}`, ...w.goals.map((g) => `- ${g}`), `- 交付物：${w.deliverable}`, `- 资源：${w.resources.join("；")}`, ``]),
+      `## 作品集项目`,
+      ...route.projects.flatMap((p2) => [`### ${p2.name}`, p2.desc, `技能：${p2.skills.map((s) => zh(s)).join("、")}`, ``]),
+      `## 简历关键词`, route.resume_keywords.join(" · "),
+      ``, `## 面试题库`,
+      ...Object.entries(route.interview).flatMap(([cat, qs]) => [`### ${cat}`, ...qs.map((q) => `- ${q}`)]),
+    ].join("\n");
+    const blob = new Blob([md], { type: "text/markdown" });
+    const a = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(blob),
+      download: `roadmap-${state.role}.md`,
+    });
+    $("#dl").onclick = () => a.click();
+  }
+  $("#gen").onclick = generate;
+</script>

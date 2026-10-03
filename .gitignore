@@ -1,0 +1,24 @@
+# raw data caches（保留 manifest 与线程索引，其余可重取）
+data/raw/hn/thread_*.json
+data/raw/hn/fetch_errors.json
+data/raw/misc/*.json
+data/raw/misc/*.rss
+data/raw/misc/*.xml
+
+# sqlite
+data/*.sqlite
+data/*.sqlite-journal
+
+# node / build
+node_modules/
+site/dist/
+.astro/
+
+# tool caches
+.playwright-cli/
+
+# os / python
+.DS_Store
+__pycache__/
+*.pyc
+.venv/

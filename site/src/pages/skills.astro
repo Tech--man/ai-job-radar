@@ -1,0 +1,105 @@
+---
+import Base from "../layouts/Base.astro";
+import skills from "../data/skills.json";
+import metaRaw from "../data/skills_meta.json";
+
+const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const meta = Object.fromEntries(metaRaw.skills.map((s) => [s.id, s]));
+const catNames = { lang: "语言与通用", "ml-core": "机器学习核心", "llm-framework": "LLM 应用框架", rag: "RAG 与检索", agent: "Agent 与工具调用", serving: "推理服务与性能", training: "训练与微调", cloud: "云与 DevOps", data: "数据工程", eval: "评估与质量", security: "安全与合规", multimodal: "多模态", product: "产品与业务", frontend: "前端与原型" };
+const byCat = {};
+for (const s of skills.skills) {
+  const c = meta[s.id]?.category ?? "other";
+  (byCat[c] ??= []).push(s);
+}
+const catOrder = Object.keys(catNames).filter((c) => byCat[c]?.length);
+const pairs = skills.cooccurrence_top.slice(0, 15);
+const zh = (id: string) => meta[id]?.name_zh ?? id;
+const noise = skills.noise_candidates.filter((n) => n.verdict.includes("噪音"));
+---
+<Base>
+  <h1 class="text-3xl font-extrabold mb-3">技能图谱</h1>
+  <p class="muted max-w-3xl leading-relaxed mb-8">
+    共 {skills.skills.length} 项技能在本期 {skills.total_ai_jobs.toLocaleString()} 条 AI 岗位帖中被正则字典命中。
+    「溢价」一列 = 该技能岗位的薪资中位数差（相对同池无该技能岗位），n 为薪资样本数；样本不足会显式标注，绝不编造。
+  </p>
+
+  <section class="grid md:grid-cols-2 gap-6 mb-10">
+    <div class="card p-5">
+      <h2 class="font-bold mb-3">技能共现 Top 15（同时出现在同一岗位帖）</h2>
+      <div id="chart-pairs" class="h-96"></div>
+    </div>
+    <div class="card p-5">
+      <h2 class="font-bold mb-3">噪音技能候选（高 Mention × 低溢价 × 低区分度）</h2>
+      {noise.length ? noise.map((n) => (
+        <div class="py-2 border-b border-white/5 text-sm">
+          <div class="flex justify-between"><span>{zh(n.skill)}</span><span class="num muted">出现 {n.freq_pct}% · 溢价 {n.delta_pct}%</span></div>
+          <div class="muted text-xs mt-0.5">{n.verdict}</div>
+        </div>
+      )) : <p class="muted text-sm">本期语料中未发现同时满足三个噪音条件的技能（详见研究报告的宽松口径列表）。</p>}
+      <h2 class="font-bold mt-6 mb-3">无法判定溢价的常见技能</h2>
+      <div class="flex flex-wrap gap-2">
+        {skills.skills.filter((s) => s.confidence === "insufficient" && s.count >= 10).slice(0, 14).map((s) => (
+          <span class="badge badge-mute">{s.name_zh} <span class="muted">n&lt;{8}</span></span>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  {catOrder.map((c) => (
+    <section class="mb-8">
+      <h2 class="font-bold mb-3">{catNames[c]} <span class="muted text-sm font-normal">（{byCat[c].length} 项）</span></h2>
+      <div class="card p-2 overflow-x-auto">
+        <table class="data">
+          <thead><tr><th>技能</th><th>英文</th><th>出现率</th><th>帖数</th><th>溢价</th><th>薪资样本</th><th>置信度</th></tr></thead>
+          <tbody>
+            {byCat[c].map((s) => (
+              <tr>
+                <td class="font-medium">{s.name_zh}</td>
+                <td class="muted">{s.name_en}</td>
+                <td class="num">{s.freq_pct}%</td>
+                <td class="num">{s.count}</td>
+                <td class="num">
+                  {s.delta_pct != null
+                    ? <span class={`badge ${s.delta_pct > 5 ? "badge-up" : s.delta_pct < -5 ? "badge-down" : "badge-mute"}`}>{s.delta_pct > 0 ? "+" : ""}{s.delta_pct}%</span>
+                    : <span class="missing">样本不足</span>}
+                </td>
+                <td class="num">{s.n_with || "—"}</td>
+                <td class="muted">{s.confidence === "insufficient" ? "—" : { low: "低", medium: "中", high: "高" }[s.confidence]}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  ))}
+
+  <section class="card p-5">
+    <h2 class="font-bold mb-2">共现明细</h2>
+    <div class="flex flex-wrap gap-2 text-sm">
+      {pairs.map((p2) => <span class="badge">{zh(p2.a)} × {zh(p2.b)} <span class="muted">{p2.n}</span></span>)}
+    </div>
+  </section>
+</Base>
+
+<script src={B + "echarts.min.js"} defer></script>
+<script define:vars={{ pairs }}>
+  window.addEventListener("DOMContentLoaded", () => {
+    const namesEl = document.getElementById("pair-names");
+    const names = namesEl ? JSON.parse(namesEl.textContent) : {};
+    if (!window.echarts) return;
+    const el = document.getElementById("chart-pairs");
+    const c = echarts.init(el);
+    const labels = pairs.map((p) => names[p.a] + " × " + names[p.b]).reverse();
+    c.setOption({
+      textStyle: { color: "#c9d6f2" },
+      grid: { left: 8, right: 40, top: 8, bottom: 8, containLabel: true },
+      xAxis: { type: "value", splitLine: { show: false }, axisLabel: { color: "#8ea0c4" } },
+      yAxis: { type: "category", data: labels, axisLabel: { color: "#c9d6f2", fontSize: 10, width: 150, overflow: "truncate" } },
+      tooltip: {},
+      series: [{ type: "bar", data: pairs.map((p) => p.n).reverse(), itemStyle: { color: "#35d0ba", borderRadius: 4 }, barMaxWidth: 12,
+        label: { show: true, position: "right", color: "#8ea0c4", fontSize: 10 } }],
+    });
+    window.addEventListener("resize", () => c.resize());
+  });
+</script>
+<script type="application/json" id="pair-names" set:html={JSON.stringify(Object.fromEntries(skills.skills.map((s) => [s.id, s.name_zh])))} />

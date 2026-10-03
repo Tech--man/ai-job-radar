@@ -1,0 +1,107 @@
+---
+import Base from "../layouts/Base.astro";
+import salary from "../data/salary.json";
+import overview from "../data/overview.json";
+
+const zh = (rid: string) =>
+  overview.role_distribution.find((x) => x.role === rid)?.name_zh ??
+  ({ "ml-research": "ML 研究", other: "通用 AI / 其他" })[rid] ?? rid;
+
+function k(v) {
+  return v == null ? "—" : "$" + Math.round(v / 1000) + "k";
+}
+function row(r) {
+  return r.median_mid != null
+    ? `${k(r.median_mid)}（P25–P75：${k(r.p25_mid)}–${k(r.p75_mid)}）`
+    : "样本不足，无法给出";
+}
+const roleRows = Object.entries(salary.by_role).sort((a, b) => (b[1].median_mid ?? 0) - (a[1].median_mid ?? 0));
+const cityRows = Object.entries(salary.by_city).sort((a, b) => (b[1].median_mid ?? 0) - (a[1].median_mid ?? 0));
+const skillRows = salary.by_skill_top;
+const remoteNames = { remote: "远程/可远程", hybrid: "混合", unknown: "未注明/驻场" };
+---
+<Base>
+  <h1 class="text-3xl font-extrabold mb-3">薪资雷达</h1>
+  <p class="muted max-w-3xl leading-relaxed mb-2">
+    全部数字来自岗位帖自述薪资区间的解析（mid = 区间中值），共 {salary.pool_size} 帖、
+    占 AI 岗位 {salary.pool_share}%。没有披露薪资的帖子：<b>不插补、不推算、不编造</b>，
+    凡样本 &lt; 8 的维度一律显示「样本不足」。
+  </p>
+  <p class="muted text-xs mb-8">口径提醒：非美元薪资按静态汇率粗略折算（详见方法与来源页）；股票/期权不计入；时薪按 1750 小时/年折算。自述薪资存在虚报与选择性披露，读数请当「区间感」而非精确行情。</p>
+
+  <section class="card p-5 mb-8">
+    <h2 class="font-bold mb-3">按岗位</h2>
+    <div class="overflow-x-auto">
+      <table class="data">
+        <thead><tr><th>岗位</th><th>帖数</th><th>薪资样本</th><th>覆盖率</th><th>年薪读数（USD）</th></tr></thead>
+        <tbody>
+          {roleRows.map(([rid, r]) => (
+            <tr>
+              <td>{zh(rid)}</td>
+              <td class="num">{r.n_posts}</td>
+              <td class="num">{r.n || <span class="missing">0</span>}</td>
+              <td class="num">{r.salary_available_share}%</td>
+              <td class="num">{r.median_mid != null ? row(r) : <span class="missing">样本不足，无法给出</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="grid md:grid-cols-2 gap-6 mb-8">
+    <div class="card p-5">
+      <h2 class="font-bold mb-3">按技能（溢价 Top / 底部）</h2>
+      <div class="overflow-x-auto">
+        <table class="data">
+          <thead><tr><th>技能</th><th>溢价</th><th>样本</th><th>含技能中位</th><th>不含中位</th></tr></thead>
+          <tbody>
+            {skillRows.map((s) => (
+              <tr>
+                <td>{s.skill}</td>
+                <td class="num"><span class={`badge ${s.delta_pct > 5 ? "badge-up" : s.delta_pct < -5 ? "badge-down" : "badge-mute"}`}>{s.delta_pct > 0 ? "+" : ""}{s.delta_pct}%</span></td>
+                <td class="num">{s.n_with}</td>
+                <td class="num">{k(s.median_with)}</td>
+                <td class="num">{k(s.median_without)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="muted text-xs mt-2">相关≠因果：高溢价技能的从业者也常在大厂/高生活成本城市，解读需谨慎。</p>
+    </div>
+    <div class="card p-5">
+      <h2 class="font-bold mb-3">按城市</h2>
+      <div class="overflow-x-auto">
+        <table class="data">
+          <thead><tr><th>城市</th><th>帖数</th><th>读数</th></tr></thead>
+          <tbody>
+            {cityRows.map(([city, r]) => (
+              <tr><td>{city}</td><td class="num">{r.n_posts}</td>
+                <td class="num">{r.median_mid != null ? row(r) : <span class="missing">样本不足</span>}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <h2 class="font-bold mt-6 mb-3">按办公形态</h2>
+      <table class="data">
+        <tbody>
+          {Object.entries(salary.by_remote).map(([kind, r]) => (
+            <tr><td>{remoteNames[kind]}</td><td class="num">{r.n_posts} 帖</td>
+              <td class="num">{r.median_mid != null ? row(r) : <span class="missing">样本不足</span>}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <h2 class="font-bold mt-6 mb-3">按公司类型</h2>
+      <table class="data">
+        <tbody>
+          {Object.entries(salary.by_stage).map(([stage, r]) => (
+            <tr><td>{stage === "bigtech" ? "知名大厂/AI 实验室（名单匹配）" : "自述融资阶段（seed/series）"}</td>
+              <td class="num">{r.n_posts} 帖</td>
+              <td class="num">{r.median_mid != null ? row(r) : <span class="missing">样本不足</span>}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</Base>

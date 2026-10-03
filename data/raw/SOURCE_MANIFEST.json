@@ -1,0 +1,53 @@
+[
+ {
+  "source": "RemoteOK API",
+  "url": "https://remoteok.com/api",
+  "fetched_at": "2026-10-04T00:17:15+0800",
+  "records": 99,
+  "license_note": "API Terms of Service: Please link back (with follow, and without nofollow!) to the URL on Remote OK and mention Remote OK as a source, so we get traffic back from your site. If you do not we'll have to suspend API access.\n\nPlease don't use the Remote OK logo without written permission as it's a registered trademark, please DO use our name Remote OK though.",
+  "file": "data/raw/misc/remoteok.json"
+ },
+ {
+  "source": "WeWorkRemotely RSS",
+  "category": "programming",
+  "url": "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+  "fetched_at": "2026-10-04T00:18:14+0800",
+  "records": 25,
+  "license_note": "public RSS feed; comply with weworkremotely.com terms",
+  "file": "data/raw/misc/wwr_programming.xml"
+ },
+ {
+  "source": "WeWorkRemotely RSS",
+  "category": "devops-sysadmin",
+  "url": "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss",
+  "fetched_at": "2026-10-04T00:18:14+0800",
+  "records": 17,
+  "license_note": "public RSS feed; comply with weworkremotely.com terms",
+  "file": "data/raw/misc/wwr_devops-sysadmin.xml"
+ },
+ {
+  "source": "WeWorkRemotely RSS",
+  "category": "product",
+  "url": "https://weworkremotely.com/categories/remote-product-jobs.rss",
+  "fetched_at": "2026-10-04T00:18:14+0800",
+  "records": 16,
+  "license_note": "public RSS feed; comply with weworkremotely.com terms",
+  "file": "data/raw/misc/wwr_product.xml"
+ },
+ {
+  "source": "WeWorkRemotely RSS",
+  "category": "design",
+  "url": "https://weworkremotely.com/categories/remote-design-jobs.rss",
+  "fetched_at": "2026-10-04T00:18:14+0800",
+  "records": 23,
+  "license_note": "public RSS feed; comply with weworkremotely.com terms",
+  "file": "data/raw/misc/wwr_design.xml"
+ },
+ {
+  "source": "Aux signals (GitHub/arXiv/HF)",
+  "url": "https://api.github.com, https://export.arxiv.org/api, https://huggingface.co/api",
+  "fetched_at": "2026-10-04T00:31:06+0800",
+  "license_note": "public APIs; GitHub data under each repo's license; arXiv metadata under arXiv ToS",
+  "file": "data/raw/misc/aux_signals.json"
+ }
+]
