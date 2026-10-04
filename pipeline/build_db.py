@@ -549,9 +549,34 @@ def load_zh() -> list[dict]:
     return out
 
 
+def load_boss() -> list[dict]:
+    """BOSS 直聘（v0.3，用户本人账号授权采集的列表数据）。"""
+    f = RAW / "zh" / "boss.json"
+    if not f.exists():
+        return []
+    out = []
+    for b in json.loads(f.read_text()):
+        # 文本 = 标题+薪资+地区+公司+技能标签+筛选标签；不含 JD 详情（robots 限制）
+        text = " ".join(filter(None, [
+            b.get("title"), b.get("salary"), b.get("area"), b.get("company"),
+            " ".join(b.get("tags") or []), " ".join(b.get("labels") or []),
+        ]))
+        if len(text) < 10 or not b.get("title"):
+            continue
+        date = time.strftime("%Y-%m-%d")  # 列表页无发布日期，按采集日归月
+        out.append({
+            "source": "boss", "source_id": b.get("href") or b.get("title"),
+            "posted_date": date, "month": date[:7],
+            "company": b.get("company") or "", "title": b.get("title") or "",
+            "text": text,
+            "url": ("https://www.zhipin.com" + b["href"]) if b.get("href", "").startswith("/") else b.get("href") or None,
+        })
+    return out
+
+
 def main() -> None:
     PROCESSED.mkdir(parents=True, exist_ok=True)
-    rows = load_hn() + load_remoteok() + load_wwr() + load_zh()
+    rows = load_hn() + load_remoteok() + load_wwr() + load_zh() + load_boss()
     print(f"loaded raw posts: {len(rows)}")
     seen: set[str] = set()
     records: list[dict] = []

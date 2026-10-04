@@ -360,14 +360,16 @@ def main() -> None:
             "top_roles": comp_roles[cn].most_common(3),
             "is_bigtech_listed": cn in BIG_TECH,
         })
-    # 中文市场：官方渠道（单公司全量 dump）单独列，不进「公司热度」榜；社区榜仅 V2EX
+    # 中文市场：官方渠道（单公司全量 dump）单独列，不进「公司热度」榜；
+    # 社区/平台榜 = V2EX + BOSS + 拉勾（多公司来源）
     official_zh = dict(Counter(j["company_norm"] for j in zh_jobs
                                if j["source"] in ("tencent", "baidu")))
+    PLATFORM_ZH = ("v2ex", "boss", "lagou")
     comp_zh_counter: Counter = Counter()
     comp_zh_display: dict[str, Counter] = defaultdict(Counter)
     comp_zh_roles: dict[str, Counter] = defaultdict(Counter)
     for j in zh_jobs:
-        if j["source"] not in ("v2ex",):
+        if j["source"] not in PLATFORM_ZH:
             continue
         cn = j["company_norm"]
         if not cn or len(cn) < 2:
@@ -376,7 +378,7 @@ def main() -> None:
         comp_zh_display[cn][j["company"]] += 1
         comp_zh_roles[cn][j["role"]] += 1
     companies_zh_payload = []
-    for cn, n in comp_zh_counter.most_common(20):
+    for cn, n in comp_zh_counter.most_common(25):
         if n < 2:
             break
         companies_zh_payload.append({
@@ -390,7 +392,7 @@ def main() -> None:
         "zh_official_channels": [{"company": "腾讯（招聘官网）", "norm": "tencent", "n": official_zh.get("腾讯", 0)},
                                  {"company": "百度（招聘官网）", "norm": "baidu", "n": official_zh.get("百度", 0)}],
         "companies_zh": companies_zh_payload,
-        "companies_zh_note": "社区榜仅覆盖 V2EX 酷工作近期帖（上游 API 分页失效，存量不可得），样本极小仅示意",
+        "companies_zh_note": "平台/社区榜覆盖 V2EX 近期帖与 BOSS直聘（用户授权采集的搜索切片），按岗位帖次数计",
     }, ensure_ascii=False))
 
     # ---- trend.json（仅 HN 月度帖口径；中文源为官网 dump 无可靠月度语义，仅给 zh 计数）----
