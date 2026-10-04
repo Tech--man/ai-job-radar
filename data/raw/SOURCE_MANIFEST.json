@@ -76,5 +76,14 @@
   "robots": "robots.txt 允许 /api 与 /feed（Disallow 仅 backstage/signin/signout/settings）",
   "license_note": "社区公开帖；不采集作者字段；上游 v1 API 分页失效，仅最新一页 + RSS",
   "file": "data/raw/zh/v2ex.json"
+ },
+ {
+  "source": "BOSS直聘（用户授权采集）",
+  "url": "https://www.zhipin.com/wapi/zpgeek/search/joblist.json（列表接口，关键词：大模型）",
+  "fetched_at": "2026-10-04T16:07:57+0800",
+  "records": 120,
+  "robots": "robots.txt 禁止 /*?query=* 与 /job_detail/ —— 针对爬虫；本次为用户本人账号手动登录授权（Chrome 副本实例 CDP 会话）、仅列表 JSON 接口、低频（4-6.5s 间隔、频控即停）、仅聚合字段，不含 HR 个人信息（boss* 字段在 ingest 阶段剔除，不入库）；来源方可随时要求移除",
+  "license_note": "仅聚合统计用途；不转载原文",
+  "file": "data/raw/zh/boss.json"
  }
 ]

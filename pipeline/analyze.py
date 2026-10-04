@@ -307,6 +307,12 @@ def main() -> None:
             city_jobs_zh[j["city"]].append(j)
     for city, js in sorted(city_jobs_zh.items(), key=lambda kv: -len(kv[1]))[:12]:
         pool = salary_pool(js)
+        if len(pool) < 10:
+            # 中文城市样本门槛更严：小样本极易被单条异常区间顶飞中位数
+            by_city_zh[city] = {"n": len(pool), "n_posts": len(js), "median_min": None,
+                                "median_max": None, "median_mid": None, "p25_mid": None,
+                                "p75_mid": None, "salary_available_share": pct(len(pool), len(js))}
+            continue
         by_city_zh[city] = {**sal_stats(pool), "n_posts": len(js)}
     by_remote = {}
     for kind in ["remote", "hybrid", "unknown"]:

@@ -12,7 +12,7 @@ const roleRows = Object.entries(salary.by_role_zh).sort((a, b) => (b[1].median_m
 const cityRows = Object.entries(salary.by_city_zh);
 const official = companies.zh_official_channels;
 const community = companies.companies_zh;
-const srcNames = { tencent: "腾讯招聘官网", baidu: "百度招聘官网", v2ex: "V2EX 酷工作", hn: "HN" };
+const srcNames = { tencent: "腾讯招聘官网", baidu: "百度招聘官网", v2ex: "V2EX 酷工作", boss: "BOSS直聘*", hn: "HN" };
 
 function k(v: number | null) {
   return v == null ? "—" : "$" + Math.round(v / 1000) + "k";
@@ -29,9 +29,9 @@ const kpis = [
   <section class="mb-8">
     <h1 class="text-3xl font-extrabold tracking-tight">中文市场快照</h1>
     <p class="muted mt-3 max-w-3xl leading-relaxed">
-      与英文市场（HN 社区月度帖）不同，中文数据来自<b>公司公开招聘页</b>（腾讯、百度官网全量关键词命中）
-      加上社区帖（V2EX 酷工作）。两种口径的结构差异很大：官网覆盖密集但<b>不披露薪资</b>，
-      社区帖披露薪资但本期存量不可得。所有缺失处均显式标注，不做插补。
+      与英文市场（HN 社区月度帖）不同，中文数据来自<b>公司公开招聘页</b>（腾讯、百度官网全量关键词命中）、
+      <b>BOSS直聘列表接口</b>（* 经站主本人账号授权的低频采集切片，含薪资；详见页面底部边界说明）以及社区帖（V2EX）。
+      官网覆盖密集但<b>不披露薪资</b>，BOSS 切片披露薪资但受平台频控限制样本量。所有缺失处均显式标注，不做插补。
     </p>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
       {kpis.map((kpi) => (
@@ -85,7 +85,7 @@ const kpis = [
           ))}
         </tbody>
       </table>
-      <p class="muted text-xs mt-3">中文薪资覆盖率仅 {salary.pool_zh_share}%：腾讯/百度官网不披露薪资，V2EX 本期仅 10 帖。这也解释了为何各大厂「薪资行情」类内容多为猜测——官方渠道根本没有数字。</p>
+      <p class="muted text-xs mt-3">中文薪资覆盖率 {salary.pool_zh_share}%：腾讯/百度官网按制度不披露薪资；有薪样本主要来自 BOSS直聘授权采集切片（{zh.sources.boss ?? 0} 帖，全部自带区间）与 V2EX。口径：中文裸 K/万 按月薪年化。</p>
     </div>
     <div class="card p-5">
       <h2 class="font-bold mb-3">城市分布（帖内提及）</h2>
@@ -105,22 +105,23 @@ const kpis = [
         {official.map((c) => <span class="badge">{c.company} <span class="muted">{c.n} 岗</span></span>)}
       </div>
       <p class="muted text-xs mb-3">官方渠道为关键词全量命中（单公司 dump），不代表招聘量排行。</p>
-      <h3 class="font-semibold text-sm mb-2">社区公司热度（V2EX，仅示意）</h3>
+      <h3 class="font-semibold text-sm mb-2">平台公司热度（BOSS 切片 + V2EX，按帖次数）</h3>
       {community.length ? (
         <div class="flex flex-wrap gap-2">
-          {community.slice(0, 12).map((c) => <span class="badge">{c.company} <span class="muted">{c.n}</span></span>)}
+          {community.slice(0, 16).map((c) => <span class="badge">{c.company} <span class="muted">{c.n}</span></span>)}
         </div>
-      ) : <p class="muted text-sm">本期社区样本过小。</p>}
+      ) : <p class="muted text-sm">本期平台样本过小。</p>}
     </div>
   </section>
 
   <section class="card p-5">
     <h2 class="font-bold mb-2">中文市场已知边界（读数前必读）</h2>
     <ul class="text-sm list-disc pl-5 space-y-2 muted">
-      <li>BOSS 直聘、拉勾、猎聘、智联等主流中文招聘平台为登录墙/强反爬站点，按项目约束<b>未采集</b>；本页不代表中文全市场，仅代表「官网公开页 + V2EX 社区」两个切片。</li>
-      <li>腾讯/百度为官网接口单公司全量 dump，岗位分布偏向其自身业务结构（如百度算法岗占比高）。</li>
-      <li>V2EX 官方 API 分页已失效（仅返回最新一页），历史存量经由第三方搜索服务的通道因 robots 禁止而放弃；社区趋势待后续接入合规来源。</li>
-      <li>中文薪资解析遵循中文市场惯例：裸 K/万 默认月薪口径（见<a class="accent" href={B + "about"}>方法与来源</a>），个别"12薪/14薪"年终月数剔除。</li>
+      <li>BOSS 直聘数据为<b>站主本人账号授权</b>的低频采集切片（列表 JSON 接口，4-6.5 秒间隔、触发平台频控即停），仅覆盖采集时点搜索结果前几页，<b>不是全量</b>；不含 HR 个人信息（boss* 字段在入库前剔除）。robots.txt 对查询路径的爬虫禁令已在来源清单中如实记录。</li>
+      <li>拉勾、猎聘、智联、电鸭等平台因 WAF/登录墙/前端渲染未采集；本页不代表中文全市场，仅代表「官网公开页 + BOSS 授权切片 + V2EX 社区」三个切片。</li>
+      <li>腾讯/百度为官网接口单公司全量 dump，岗位分布偏向其自身业务结构（如百度算法岗占比高）；BOSS 切片的关键词为「大模型」等，分布偏向搜索相关性。</li>
+      <li>V2EX 官方 API 分页已失效（仅返回最新一页），历史存量经由第三方搜索服务的通道因 robots 禁止而放弃。</li>
+      <li>中文薪资解析遵循中文市场惯例：裸 K/万 默认月薪口径（见<a class="accent" href={B + "about"}>方法与来源</a>），"12薪/14薪" 年终月数剔除。</li>
     </ul>
   </section>
 </Base>
