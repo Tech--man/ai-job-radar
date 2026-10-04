@@ -27,6 +27,11 @@ ALLOWED_HOSTS = {
     "export.arxiv.org",
     "huggingface.co",
     "cdn.jsdelivr.net",
+    # 中文市场（v0.2）：robots 已核验（v2ex 允许 /api 与 /feed；腾讯 robots 为 302 页面视同缺失；
+    # 百度 robots 404 视同缺失。fetch_zh.py 内另有 robots 门禁做二次校验）
+    "www.v2ex.com",
+    "careers.tencent.com",
+    "talent.baidu.com",
 }
 
 USER_AGENT = "ai-job-radar-research/0.1 (open-data research; contact: none)"
@@ -108,6 +113,41 @@ def safe_fetch(url: str, *, binary: bool = False, headers: dict | None = None) -
     return data.decode("utf-8", errors="replace") if not binary else data
 
 
+def safe_fetch_post(url: str, *, body: str, content_type: str,
+                    headers: dict | None = None) -> str:
+    """与 safe_fetch 同等约束的 POST（固定 IP 建连、白名单、禁重定向）。
+
+    仅用于官方招聘页公开 JSON 接口（如百度招聘），body 为静态构造的表单/JSON 文本。
+    """
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https":
+        raise ValueError(f"scheme not allowed: {parsed.scheme}")
+    host = parsed.hostname or ""
+    if host not in ALLOWED_HOSTS:
+        raise ValueError(f"host not in allowlist: {host}")
+    ips = _resolve_public_ips(host)
+    conn = _PinnedHTTPS(host, ips[0], timeout=TIMEOUT)
+    try:
+        path = parsed.path or "/"
+        if parsed.query:
+            path += "?" + parsed.query
+        req_headers = {"User-Agent": USER_AGENT, "Accept": "*/*", "Host": host,
+                       "Content-Type": content_type,
+                       "Content-Length": str(len(body.encode("utf-8")))}
+        if headers:
+            req_headers.update(headers)
+        conn.request("POST", path, body=body.encode("utf-8"), headers=req_headers)
+        resp = conn.getresponse()
+        if 300 <= resp.status < 400:
+            raise ValueError(f"redirect not allowed: HTTP {resp.status}")
+        if resp.status >= 400:
+            raise RuntimeError(f"HTTP {resp.status} from {host}")
+        data = resp.read()
+    finally:
+        conn.close()
+    return data.decode("utf-8", errors="replace")
+
+
 def parse_xml_safely(xml_text: str, *, max_bytes: int = 8 * 1024 * 1024) -> ET.Element:
     """解析不可信 XML 前拒绝 DOCTYPE/ENTITY 并限制大小，防实体扩展。"""
     if len(xml_text.encode("utf-8")) > max_bytes:
@@ -128,7 +168,8 @@ FX_TO_USD = {
 FX_SNAPSHOT_NOTE = "静态汇率快照，仅用于粗粒度区间归一，不构成精确换算"
 
 # ---- 薪资合理性区间（年薪 USD）----
-SALARY_MIN_USD = 25_000
+# 下限 1.5 万美元：兼顾中文市场（10.7 万人民币/年起），过滤实习/兼职噪声；上限不变
+SALARY_MIN_USD = 15_000
 SALARY_MAX_USD = 900_000
 
 T0_NOTE = "T+0 = 2026-10-04 00:05 +0800"

@@ -151,6 +151,71 @@ SKILLS = [
 
 SKILL_BY_ID = {s[0]: s for s in SKILLS}
 
+# ---- 中文别名（v0.2 中文市场扩展）----
+# 注意：Python re 中 CJK 属于 \w，\b 包裹中文会导致永不命中；中文别名一律不加 \b，
+# 拉丁字母别名保留 \b。逐条可溯源，误报容忍度见 docs/methodology。
+ZH_ALIAS_PATTERNS = {
+    "llm-fundamentals": [r"大模型|大语言模型|\bdeepseek\b|通义千问|文心一言|豆包|\bkimi\b|智谱|百川"],
+    "openai-api": [r"\bchatgpt\b"],
+    "prompt-engineering": [r"提示词"],
+    "rag": [r"检索增强|知识库问答"],
+    "vector-db": [r"向量数据库|向量检索|向量库"],
+    "embeddings": [r"文本嵌入|嵌入向量"],
+    "semantic-search": [r"语义检索|混合检索|召回策略"],
+    "reranking": [r"重排序|重排"],
+    "chunking": [r"分块"],
+    "doc-pipeline": [r"文档解析|非结构化数据"],
+    "fine-tuning": [r"微调|\bsft\b"],
+    "rlhf": [r"人类反馈|偏好对齐|\bdpo\b"],
+    "pretraining": [r"预训练"],
+    "distributed-training": [r"分布式训练|模型并行|数据并行"],
+    "inference-opt": [r"推理优化|推理加速|推理部署|模型部署"],
+    "quantization": [r"模型量化"],
+    "gpu": [r"算力|昇腾|\bnpu\b"],
+    "kubernetes": [r"\bk8s\b|容器编排"],
+    "docker": [r"容器化"],
+    "ml-fundamentals": [r"机器学习|深度学习|神经网络"],
+    "multimodal": [r"多模态|视觉大模型"],
+    "image-gen": [r"文生图|\baigc\b"],
+    "speech": [r"语音识别|语音合成|数字人"],
+    "llm-eval": [r"大模型评测|评测集|模型评估"],
+    "ai-security": [r"大模型安全|模型安全|内容安全|ai安全"],
+    "prompt-injection": [r"红队|越狱|注入攻击"],
+    "privacy-compliance": [r"数据安全|合规"],
+    "product-management": [r"产品经理|需求分析|\bprd\b|产品规划"],
+    "user-research": [r"用户调研|用户访谈"],
+    "analytics": [r"埋点|数据分析"],
+    "ab-testing": [r"a/b测试|ab 实验|ab实验"],
+    "etl": [r"数据管道|数据管线|数据同步"],
+    "warehouse": [r"数仓|数据仓库|湖仓"],
+    "data-curation": [r"数据标注|数据清洗|语料"],
+    "airflow": [r"dolphinscheduler"],
+    "solution-arch": [r"解决方案|售前|交付工程师"],
+    "customer-facing": [r"客户成功|客户"],
+    "gtm": [r"商业化|获客"],
+    "agent-workflow": [r"智能体|工作流编排"],
+    "multi-agent": [r"多智能体"],
+    "function-calling": [r"工具调用|插件开发"],
+    "golang": [r"go语言"],
+}
+
+# 中文市场特有技能
+SKILLS += [
+    ("dify", "Dify/Coze/RAGFlow", "LLM 应用平台（Dify/Coze/RAGFlow/FastGPT）", "llm-framework",
+     [r"\bdify\b|\bcoze\b|扣子|\bragflow\b|\bfastgpt\b"], ["llm-app", "rag"]),
+    ("vue", "Vue", "Vue 前端框架", "frontend", [r"\bvue\b"], ["llm-app"]),
+    ("cn-cloud", "阿里云/腾讯云/华为云", "国产云平台与云原生", "cloud",
+     [r"阿里云|腾讯云|华为云|火山引擎|云原生"], ["mlops", "data-eng"]),
+    ("paddle", "PaddlePaddle 飞桨", "飞桨深度学习框架", "ml-core",
+     [r"飞桨|\bpaddle\b"], []),
+]
+_by_id = {s[0]: s for s in SKILLS}
+for _sid, _pats in ZH_ALIAS_PATTERNS.items():
+    _s = _by_id.get(_sid)
+    if _s is not None:
+        _i = SKILLS.index(_s)
+        SKILLS[_i] = (_s[0], _s[1], _s[2], _s[3], _s[4] + _pats, _s[5])
+
 
 def skill_dicts():
     """导出为纯 dict 列表。"""

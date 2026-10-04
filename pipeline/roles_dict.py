@@ -1,12 +1,13 @@
-"""岗位分类体系：9 个目标岗位 + ml-research 兜底 + other。
+"""岗位分类体系：9 个目标岗位 + ml-research 兜底 + other（中英双语关键词）。
 
 分类逻辑（build_db.classify_job）：
-1. 标题命中 title_keywords → 权重 4.0/词
-2. 正文命中 text_keywords → 权重 1.0/词（按「命中不同关键词数」计，防长文刷分）
+1. 标题命中 title_keywords(_zh) → 权重 4.0/词
+2. 正文命中 text_keywords(_zh) → 权重 1.0/词（按「命中不同关键词数」计，防长文刷分）
 3. 主岗位 = 得分最高且 ≥ 阈值；多标签 = 得分 ≥ 主得分 × 0.6
-4. AI 相关性门槛：必须命中 ai_gate（标题或正文），否则标记 non-ai
+4. AI 相关性门槛：命中 ai_gate（中英任一）才视为 AI 岗位，否则标记 non-ai
 
-关键词默认按整词匹配（\\b 包裹）；需要前后缀通配的写进 *_raw（原样正则）。
+关键词匹配规则（build_db._kw_re）：含 CJK 的关键词按子串匹配（Python re 中 CJK
+属于 \\w，\\b 包裹会永不命中）；拉丁关键词加 \\b 词边界。
 """
 
 ROLES = [
@@ -18,11 +19,15 @@ ROLES = [
                            "generative ai engineer", "genai engineer", "ai application engineer",
                            "applied ai engineer", "gen ai engineer", "ai software engineer",
                            "ai programmer", "llm ops"],
+        "title_keywords_zh": ["大模型应用", "AI应用工程师", "AI应用", "大模型开发", "AI开发工程师",
+                              "LLM应用", "AIGC工程师", "AI工程师", "大模型工程师"],
         "text_keywords": ["llm", "llms", "generative ai", "genai", "gen ai", "chatbot",
                           "gpt-4", "gpt-5", "gpt-4o", "claude", "gemini", "copilot",
                           "ai features", "ai product", "openai api", "prompt",
                           "conversational ai", "ai assistant", "foundation model"],
         "text_keywords_raw": [r"\bai[- ](?:powered|first|native|driven|enabled)\b"],
+        "text_keywords_zh": ["大模型", "大语言模型", "AIGC", "对话式", "智能问答", "应用落地",
+                             "AI产品", "智能体应用"],
         "gate": True,
     },
     {
@@ -31,10 +36,12 @@ ROLES = [
         "name_zh": "Agent 工程师",
         "title_keywords": ["agent engineer", "ai agent", "agentic", "autonomous agents",
                            "agent developer"],
+        "title_keywords_zh": ["智能体", "Agent开发", "多智能体", "AIAgent"],
         "text_keywords": ["agent", "agents", "agentic", "multi-agent", "tool use",
                           "function calling", "mcp", "langgraph", "crewai", "autogen",
                           "agent orchestration", "autonomous", "computer use"],
         "text_keywords_raw": [],
+        "text_keywords_zh": ["智能体", "多智能体", "工具调用", "工作流编排", "自主规划"],
         "gate": True,
     },
     {
@@ -43,11 +50,13 @@ ROLES = [
         "name_zh": "RAG 工程师",
         "title_keywords": ["rag engineer", "search engineer", "retrieval engineer",
                            "knowledge engineer", "search relevance"],
+        "title_keywords_zh": ["RAG", "知识库", "检索增强", "搜索算法"],
         "text_keywords": ["rag", "retrieval augmented", "vector database", "vector db",
                           "embeddings", "semantic search", "knowledge base", "knowledge graph",
                           "rerank", "hybrid search", "chunking", "document processing",
                           "pinecone", "qdrant", "weaviate", "milvus", "pgvector"],
         "text_keywords_raw": [],
+        "text_keywords_zh": ["检索增强", "向量数据库", "向量检索", "知识库", "知识图谱", "重排", "召回"],
         "gate": True,
     },
     {
@@ -57,10 +66,14 @@ ROLES = [
         "title_keywords": ["mlops", "ml infrastructure", "ml platform", "ai infrastructure",
                            "ai infra", "inference engineer", "ml ops", "platform engineer",
                            "gpu engineer", "ml sre", "performance engineer"],
+        "title_keywords_zh": ["机器学习平台", "AI基础设施", "AI平台", "推理优化", "训练平台",
+                              "高性能计算", "异构计算", "大模型 Infra", "AI Infra"],
         "text_keywords": ["kubernetes", "gpu", "gpus", "vllm", "inference", "model serving",
                           "distributed training", "tensorrt", "cuda", "triton", "ray",
                           "latency", "throughput", "cluster", "terraform", "infrastructure"],
         "text_keywords_raw": [],
+        "text_keywords_zh": ["推理优化", "推理加速", "训练平台", "分布式训练", "算力", "模型部署",
+                             "高性能计算", "集群调度"],
         "gate": True,
     },
     {
@@ -69,10 +82,12 @@ ROLES = [
         "name_zh": "AI 产品经理",
         "title_keywords": ["product manager", "product management", "technical product",
                            "product owner", "head of product", "product lead"],
+        "title_keywords_zh": ["AI产品经理", "大模型产品", "AIGC产品", "AI产品"],
         "text_keywords": ["roadmap", "user research", "stakeholders", "product strategy",
                           "prd", "prioritization", "product metrics", "user experience",
                           "customer feedback", "discovery", "wireframe", "usability"],
         "text_keywords_raw": [r"\bproduct managers?\b"],
+        "text_keywords_zh": ["产品经理", "需求分析", "产品规划", "用户调研", "竞品分析", "原型设计"],
         "gate": True,
     },
     {
@@ -81,10 +96,12 @@ ROLES = [
         "name_zh": "AI 安全工程师",
         "title_keywords": ["ai security", "llm security", "ai safety", "security engineer",
                            "safety engineer", "red team", "trust and safety", "adversarial"],
+        "title_keywords_zh": ["大模型安全", "AI安全", "内容安全", "模型安全", "红队"],
         "text_keywords": ["prompt injection", "jailbreak", "red teaming", "threat model",
                           "adversarial", "guardrails", "ai safety", "model safety",
                           "abuse", "misuse", "penetration testing", "vulnerability"],
         "text_keywords_raw": [],
+        "text_keywords_zh": ["大模型安全", "内容安全", "红队", "攻击防护", "越狱", "数据安全", "风控"],
         "gate": True,
     },
     {
@@ -93,10 +110,12 @@ ROLES = [
         "name_zh": "数据工程师（AI 方向）",
         "title_keywords": ["data engineer", "data engineering", "analytics engineer",
                            "data platform"],
+        "title_keywords_zh": ["数据工程师", "数据开发", "大数据开发", "数据仓库"],
         "text_keywords": ["etl", "data pipeline", "pipelines", "warehouse", "dbt", "airflow",
                           "spark", "kafka", "data quality", "data modeling", "ingestion",
                           "snowflake", "databricks", "data platform"],
         "text_keywords_raw": [],
+        "text_keywords_zh": ["数仓", "数据仓库", "数据治理", "数据管道", "数据中台", "离线数据", "实时数据"],
         "gate": True,
     },
     {
@@ -106,10 +125,13 @@ ROLES = [
         "title_keywords": ["solutions architect", "solutions engineer", "solution engineer",
                            "forward deployed", "customer engineer", "implementation engineer",
                            "field engineer", "solutions consultant"],
+        "title_keywords_zh": ["解决方案工程师", "售前工程师", "解决方案架构师", "交付工程师",
+                              "AI解决方案", "解决方案专家"],
         "text_keywords": ["proof of concept", "poc", "customer success", "onboarding",
                           "technical account", "solutions", "integrations", "consulting",
                           "implementation"],
         "text_keywords_raw": [r"\bforward[- ]deployed\b"],
+        "text_keywords_zh": ["解决方案", "售前", "POC", "交付", "客户成功", "技术方案"],
         "gate": True,
     },
     {
@@ -119,10 +141,13 @@ ROLES = [
         "title_keywords": ["sales engineer", "account executive", "growth", "business development",
                            "revenue", "gtm", "sales development", "demand generation",
                            "partnerships", "head of sales", "account manager"],
+        "title_keywords_zh": ["销售工程师", "客户经理", "大客户销售", "渠道经理", "增长负责人",
+                              "商业化负责人"],
         "text_keywords": ["quota", "arr", "outbound", "prospects", "closing", "crm",
                           "hubspot", "salesforce", "cold outreach", "book meetings",
                           "revenue targets", "pipeline generation", "lead generation"],
         "text_keywords_raw": [],
+        "text_keywords_zh": ["商业化", "获客", "营收", "签单", "客户资源", "销售目标", "渠道拓展"],
         "gate": True,
     },
     {
@@ -132,17 +157,20 @@ ROLES = [
         "title_keywords": ["research scientist", "research engineer", "applied scientist",
                            "ml scientist", "algorithm engineer", "research intern",
                            "machine learning scientist", "research lead"],
+        "title_keywords_zh": ["算法工程师", "算法专家", "算法研究员", "NLP算法", "CV算法",
+                              "多模态算法", "机器学习工程师", "深度学习算法"],
         "text_keywords": ["papers", "publications", "arxiv", "state-of-the-art", "sota",
                           "phd", "benchmarks", "pretraining", "post-training",
                           "reinforcement learning", "research"],
         "text_keywords_raw": [r"\bnovel (?:methods?|approaches?|architectures?)\b"],
+        "text_keywords_zh": ["算法", "论文", "顶会", "预训练", "模型训练", "推荐算法", "强化学习"],
         "gate": True,
     },
 ]
 
 ROLE_BY_ID = {r["id"]: r for r in ROLES}
 
-# AI 相关性门槛：命中任一才视为 AI 岗位（整词匹配 + raw 正则）
+# AI 相关性门槛：命中任一才视为 AI 岗位
 AI_GATE = [
     "ai", "artificial intelligence", "llm", "llms", "gpt", "ml", "machine learning",
     "deep learning", "genai", "generative", "gen ai", "agent", "agents", "agentic", "rag",
@@ -152,5 +180,10 @@ AI_GATE = [
     "conversational", "multimodal", "reinforcement learning", "ai assistant",
 ]
 AI_GATE_RAW = [r"\bfine[- ]?tun", r"\bai[- ](?:powered|first|native|driven|enabled)\b"]
+AI_GATE_ZH = [
+    "大模型", "大语言模型", "人工智能", "机器学习", "深度学习", "智能体", "AIGC",
+    "算法工程师", "算法专家", "算法研究员", "NLP算法", "多模态", "提示词", "知识库问答",
+    "具身智能", "文生图", "数字人", "LLM应用", "神经网络", "模型训练", "预训练",
+]
 
 ROLE_PROFILES = ["llm-app", "agent", "rag", "mlops", "ai-pm", "data-eng"]  # 建站画像岗位

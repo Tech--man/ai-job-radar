@@ -1,0 +1,144 @@
+---
+import Base from "../layouts/Base.astro";
+import overview from "../data/overview.json";
+import salary from "../data/salary.json";
+import companies from "../data/companies.json";
+
+const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const zh = overview.zh;
+const roleData = zh.role_distribution.filter((r) => r.n > 0);
+const topSkills = zh.top_skills.slice(0, 18);
+const roleRows = Object.entries(salary.by_role_zh).sort((a, b) => (b[1].median_mid ?? 0) - (a[1].median_mid ?? 0));
+const cityRows = Object.entries(salary.by_city_zh);
+const official = companies.zh_official_channels;
+const community = companies.companies_zh;
+const srcNames = { tencent: "腾讯招聘官网", baidu: "百度招聘官网", v2ex: "V2EX 酷工作", hn: "HN" };
+
+function k(v: number | null) {
+  return v == null ? "—" : "$" + Math.round(v / 1000) + "k";
+}
+const kpis = [
+  { v: zh.posts.toLocaleString(), l: "中文岗位帖（本期采集）" },
+  { v: zh.ai_posts.toLocaleString(), l: "其中 AI 相关" },
+  { v: zh.salary_posts.toLocaleString(), l: "含真实薪资区间" },
+  { v: `${zh.months[0] ?? "—"} → ${zh.months[1] ?? "—"}`, l: "官方渠道更新日期范围" },
+];
+---
+<Base>
+  <p class="muted text-sm mb-2"><a class="accent" href={B}>总览</a> / 中文市场</p>
+  <section class="mb-8">
+    <h1 class="text-3xl font-extrabold tracking-tight">中文市场快照</h1>
+    <p class="muted mt-3 max-w-3xl leading-relaxed">
+      与英文市场（HN 社区月度帖）不同，中文数据来自<b>公司公开招聘页</b>（腾讯、百度官网全量关键词命中）
+      加上社区帖（V2EX 酷工作）。两种口径的结构差异很大：官网覆盖密集但<b>不披露薪资</b>，
+      社区帖披露薪资但本期存量不可得。所有缺失处均显式标注，不做插补。
+    </p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+      {kpis.map((kpi) => (
+        <div class="card p-4">
+          <div class="text-xl md:text-2xl font-bold num">{kpi.v}</div>
+          <div class="muted text-xs mt-1">{kpi.l}</div>
+        </div>
+      ))}
+    </div>
+    <p class="muted text-xs mt-3">来源构成：{Object.entries(zh.sources).map(([s, n]) => `${srcNames[s] ?? s} ${n}`).join(" / ")}</p>
+  </section>
+
+  <section class="grid md:grid-cols-2 gap-6 mb-8">
+    <div class="card p-5">
+      <h2 class="font-bold mb-3">中文 AI 岗位分布</h2>
+      <div id="chart-roles-zh" class="h-80"></div>
+      <p class="muted text-xs mt-2">算法/研究类（ml-research）占比显著高于英文市场——中国大厂以「算法工程师」为默认 AI 岗位头衔。</p>
+    </div>
+    <div class="card p-5">
+      <h2 class="font-bold mb-3">高频技能 Top 18（中文岗位）</h2>
+      <div class="grid grid-cols-1 gap-x-6">
+        {topSkills.map((s) => (
+          <div class="flex justify-between border-b border-white/5 py-1.5 text-sm">
+            <span>{s.name_zh}</span>
+            <span class="num muted">
+              {s.freq_zh_pct}%
+              {s.delta_pct_zh != null
+                ? <span class={`ml-2 ${s.delta_pct_zh > 5 ? "text-emerald-400" : s.delta_pct_zh < -5 ? "text-rose-400" : ""}`}>{s.delta_pct_zh > 0 ? "+" : ""}{s.delta_pct_zh}%</span>
+                : <span class="ml-2 missing">溢价样本不足</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p class="muted text-xs mt-3">中文薪资样本过小（n={zh.salary_posts}），中文溢价一律标注「样本不足」，不做计算。</p>
+    </div>
+  </section>
+
+  <section class="grid md:grid-cols-2 gap-6 mb-8">
+    <div class="card p-5">
+      <h2 class="font-bold mb-3">薪资：按岗位（USD 年薪）</h2>
+      <table class="data">
+        <thead><tr><th>岗位</th><th>帖数</th><th>薪资样本</th><th>读数</th></tr></thead>
+        <tbody>
+          {roleRows.map(([rid, r]) => (
+            <tr>
+              <td>{overview.role_distribution.find((x) => x.role === rid)?.name_zh ?? rid}</td>
+              <td class="num">{r.n_posts}</td>
+              <td class="num">{r.n}</td>
+              <td class="num">{r.median_mid != null ? k(r.median_mid) : <span class="missing">样本不足，无法给出</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="muted text-xs mt-3">中文薪资覆盖率仅 {salary.pool_zh_share}%：腾讯/百度官网不披露薪资，V2EX 本期仅 10 帖。这也解释了为何各大厂「薪资行情」类内容多为猜测——官方渠道根本没有数字。</p>
+    </div>
+    <div class="card p-5">
+      <h2 class="font-bold mb-3">城市分布（帖内提及）</h2>
+      {cityRows.length ? (
+        <table class="data">
+          <thead><tr><th>城市</th><th>帖数</th><th>读数</th></tr></thead>
+          <tbody>
+            {cityRows.map(([city, r]) => (
+              <tr><td>{city}</td><td class="num">{r.n_posts}</td>
+                <td class="num">{r.median_mid != null ? k(r.median_mid) : <span class="missing">样本不足</span>}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <p class="muted text-sm">样本内未解析到城市。</p>}
+      <h2 class="font-bold mt-6 mb-2">招聘渠道热度</h2>
+      <div class="flex flex-wrap gap-2 mb-2">
+        {official.map((c) => <span class="badge">{c.company} <span class="muted">{c.n} 岗</span></span>)}
+      </div>
+      <p class="muted text-xs mb-3">官方渠道为关键词全量命中（单公司 dump），不代表招聘量排行。</p>
+      <h3 class="font-semibold text-sm mb-2">社区公司热度（V2EX，仅示意）</h3>
+      {community.length ? (
+        <div class="flex flex-wrap gap-2">
+          {community.slice(0, 12).map((c) => <span class="badge">{c.company} <span class="muted">{c.n}</span></span>)}
+        </div>
+      ) : <p class="muted text-sm">本期社区样本过小。</p>}
+    </div>
+  </section>
+
+  <section class="card p-5">
+    <h2 class="font-bold mb-2">中文市场已知边界（读数前必读）</h2>
+    <ul class="text-sm list-disc pl-5 space-y-2 muted">
+      <li>BOSS 直聘、拉勾、猎聘、智联等主流中文招聘平台为登录墙/强反爬站点，按项目约束<b>未采集</b>；本页不代表中文全市场，仅代表「官网公开页 + V2EX 社区」两个切片。</li>
+      <li>腾讯/百度为官网接口单公司全量 dump，岗位分布偏向其自身业务结构（如百度算法岗占比高）。</li>
+      <li>V2EX 官方 API 分页已失效（仅返回最新一页），历史存量经由第三方搜索服务的通道因 robots 禁止而放弃；社区趋势待后续接入合规来源。</li>
+      <li>中文薪资解析遵循中文市场惯例：裸 K/万 默认月薪口径（见<a class="accent" href={B + "about"}>方法与来源</a>），个别"12薪/14薪"年终月数剔除。</li>
+    </ul>
+  </section>
+</Base>
+
+<script src={B + "echarts.min.js"} defer></script>
+<script define:vars={{ roleData }}>
+  window.addEventListener("DOMContentLoaded", () => {
+    if (!window.echarts) return;
+    const c = echarts.init(document.getElementById("chart-roles-zh"));
+    c.setOption({
+      textStyle: { color: "#c9d6f2" },
+      grid: { left: 8, right: 36, top: 8, bottom: 8, containLabel: true },
+      xAxis: { type: "value", splitLine: { show: false }, axisLabel: { color: "#8ea0c4" } },
+      yAxis: { type: "category", data: roleData.map((r) => r.name_zh).reverse(), axisLabel: { color: "#c9d6f2", fontSize: 11 } },
+      tooltip: {},
+      series: [{ type: "bar", data: roleData.map((r) => r.n).reverse(), itemStyle: { color: "#35d0ba", borderRadius: 4 }, barMaxWidth: 14,
+        label: { show: true, position: "right", color: "#8ea0c4", fontSize: 10 } }],
+    });
+    window.addEventListener("resize", () => c.resize());
+  });
+</script>

@@ -6,6 +6,7 @@ const nav = [
   ["技能图谱", "skills"],
   ["薪资", "salary"],
   ["公司热度", "companies"],
+  ["中文市场", "zh-market"],
   ["路线生成器", "radar"],
   ["研究报告", "report"],
   ["晨间简报", "briefing"],
@@ -42,7 +43,7 @@ function isActive(href: string) {
     </main>
     <footer class="border-t border-white/10 mt-16">
       <div class="mx-auto max-w-6xl px-4 py-8 text-xs muted space-y-2">
-        <p>数据来源：Hacker News「Who is hiring?」（Algolia API）、RemoteOK API、WeWorkRemotely RSS、GitHub/arXiv/Hugging Face 公开 API。抓取时间 2026-10-04，遵守各来源条款。</p>
+        <p>数据来源：Hacker News「Who is hiring?」（Algolia API）、RemoteOK API、WeWorkRemotely RSS、腾讯/百度招聘官网公开接口、V2EX 酷工作、GitHub/arXiv/Hugging Face 公开 API。抓取时间 2026-10-04，robots 已逐一核验，遵守各来源条款。</p>
         <p>薪资来自帖子自述区间的解析，仅覆盖约 1/4 样本；缺失即标注，不插补、不编造。本站为研究性 MVP，不构成求职或招聘建议。</p>
         <p><a class="accent" href={B + "about"}>方法论与免责声明</a> · Pipeline 与数据集见 GitHub 仓库 · Built with Astro + Tailwind + ECharts</p>
       </div>

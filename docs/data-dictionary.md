@@ -23,7 +23,9 @@
 | salary_conf | TEXT | parsed / assumed-k / remoteok-structured |
 | text_clean | TEXT | 清洗后正文（≤6000 字符） |
 | url | TEXT | 原帖链接（HN 帖可由 source_id 拼出） |
-| dedup_key | TEXT | SHA-256(source·month·company_norm·title_norm) |
+| dedup_key | TEXT | SHA-256 去重键（官方结构化源 = source·source_id；社区帖 = source·month·company_norm·title_norm） |
+
+**注意**：`lang`（en/zh，CJK 占比 >0.15 判定）字段仅存于 processed/jobs.json，不在 SQLite 中（SQLite 保持原始 schema 作为存档）。中文来源 source 取值：tencent / baidu / v2ex。
 
 ## analysis 产物（data/processed/analysis/）
 

@@ -134,18 +134,30 @@ def main() -> None:
     (OUT / "profiles").mkdir(parents=True, exist_ok=True)
     jobs = load_jobs()
     ai_jobs = [j for j in jobs if j["is_ai"] == 1]
-    sal_ai = salary_pool(ai_jobs)
+    # v0.2 中英分池：溢价与薪资统计按语言分池计算，避免币种/市场结构混淆
+    en_jobs = [j for j in ai_jobs if j.get("lang") == "en"]
+    zh_jobs = [j for j in ai_jobs if j.get("lang") == "zh"]
+    sal_en = salary_pool(en_jobs)
+    sal_zh = salary_pool(zh_jobs)
+    sal_ai = sal_en  # 兼容旧字段名：全局溢价池 = 英文池
 
     # ---- 分组成员与技能 ----
     groups: dict[str, list[dict]] = {}
     for rid in [r["id"] for r in ROLES] + ["other"]:
         groups[rid] = [j for j in ai_jobs if membership(j, rid)] if rid != "other" \
             else [j for j in ai_jobs if j["role"] == "other"]
+    zh_groups: dict[str, list[dict]] = {}
+    for rid in [r["id"] for r in ROLES] + ["other"]:
+        zh_groups[rid] = [j for j in zh_jobs if membership(j, rid)] if rid != "other" \
+            else [j for j in zh_jobs if j["role"] == "other"]
 
     overall_counts = skill_counts(ai_jobs)
+    zh_counts = skill_counts(zh_jobs)
 
-    # ---- 溢价（全池） ----
-    premium = skill_premium(sal_ai)
+    # ---- 溢价（英文池为主；中文池样本小单列）----
+    premium = skill_premium(sal_en)
+    premium_zh = skill_premium(sal_zh)
+    prem_zh_by_skill = {d["skill"]: d for d in premium_zh}
 
     # ---- 特异性（技能在各岗位组的分布熵）----
     spec_groups = {g: js for g, js in groups.items() if len(js) >= 15}
@@ -199,12 +211,17 @@ def main() -> None:
     for sid, cnt in overall_counts.most_common():
         meta = sdicts.get(sid, {})
         d = prem_by_skill.get(sid)
+        dz = prem_zh_by_skill.get(sid)
+        zcnt = zh_counts.get(sid, 0)
         skills_payload.append({
             "id": sid, "name_en": meta.get("name_en", sid), "name_zh": meta.get("name_zh", sid),
             "category": meta.get("category", ""),
             "count": cnt, "freq_pct": pct(cnt, len(ai_jobs)),
+            "count_zh": zcnt, "freq_zh_pct": pct(zcnt, len(zh_jobs)),
             "delta_pct": d["delta_pct"] if d else None,
             "n_with": d["n_with"] if d else 0,
+            "delta_pct_zh": dz["delta_pct"] if dz else None,
+            "n_with_zh": dz["n_with"] if dz else 0,
             "confidence": d["confidence"] if d else "insufficient",
             "specificity": spec.get(sid, 0.0),
             "core_for": meta.get("core_for", []),
@@ -237,6 +254,8 @@ def main() -> None:
             if len(titles) >= 8:
                 break
         remote_n = sum(1 for j in js if j["is_remote"])
+        zh_members = [j for j in js if j.get("lang") == "zh"]
+        zh_sc = skill_counts(zh_members)
         payload = {
             "id": rid, "name_zh": role_meta[rid]["name_zh"], "name_en": role_meta[rid]["name_en"],
             "n_posts": len(js),
@@ -244,6 +263,11 @@ def main() -> None:
             "top_skills": [{"skill": s, "name_zh": sdicts.get(s, {}).get("name_zh", s),
                             "count": c, "freq_pct": pct(c, len(js))}
                            for s, c in sc.most_common(25)],
+            "top_skills_zh": ([{"skill": s, "name_zh": sdicts.get(s, {}).get("name_zh", s),
+                                "count": c, "freq_pct": pct(c, len(zh_members))}
+                               for s, c in zh_sc.most_common(10)]
+                              if len(zh_members) >= 10 else []),
+            "n_posts_zh": len(zh_members),
             "salary": {**sal_stats(pool), "salary_available_share": pct(len(pool), len(js))},
             "cities": cities,
             "remote_ratio": pct(remote_n, len(js)),
@@ -260,6 +284,11 @@ def main() -> None:
         pool = salary_pool(js)
         by_role[rid] = {**sal_stats(pool), "salary_available_share": pct(len(pool), len(js)),
                         "n_posts": len(js)}
+    by_role_zh = {}
+    for rid, js in zh_groups.items():
+        pool = salary_pool(js)
+        by_role_zh[rid] = {**sal_stats(pool), "salary_available_share": pct(len(pool), len(js)),
+                           "n_posts": len(js)}
     by_skill = []
     for d in premium:
         by_skill.append(d)
@@ -271,6 +300,14 @@ def main() -> None:
     for city, js in sorted(city_jobs.items(), key=lambda kv: -len(kv[1]))[:15]:
         pool = salary_pool(js)
         by_city[city] = {**sal_stats(pool), "n_posts": len(js)}
+    by_city_zh = {}
+    city_jobs_zh: dict[str, list[dict]] = defaultdict(list)
+    for j in zh_jobs:
+        if j["city"]:
+            city_jobs_zh[j["city"]].append(j)
+    for city, js in sorted(city_jobs_zh.items(), key=lambda kv: -len(kv[1]))[:12]:
+        pool = salary_pool(js)
+        by_city_zh[city] = {**sal_stats(pool), "n_posts": len(js)}
     by_remote = {}
     for kind in ["remote", "hybrid", "unknown"]:
         js = [j for j in ai_jobs if (j["remote_kind"].startswith("remote") if kind == "remote"
@@ -290,18 +327,23 @@ def main() -> None:
         pool = salary_pool(js)
         by_stage[label] = {**sal_stats(pool), "n_posts": len(js)}
     (OUT / "salary.json").write_text(json.dumps({
-        "pool_size": len(sal_ai),
-        "pool_share": pct(len(sal_ai), len(ai_jobs)),
-        "by_role": by_role, "by_skill_top": by_skill[:30],
-        "by_city": by_city, "by_remote": by_remote, "by_stage": by_stage,
-        "method_note": "mid=(min+max)/2，基于真实解析区间；n<8 显示为 null；缺失不插补",
+        "pool_size": len(sal_en),
+        "pool_share": pct(len(sal_en), len(en_jobs)),
+        "pool_zh_size": len(sal_zh),
+        "pool_zh_share": pct(len(sal_zh), len(zh_jobs)),
+        "by_role": by_role, "by_role_zh": by_role_zh,
+        "by_skill_top": by_skill[:30],
+        "by_skill_top_zh": premium_zh[:15],
+        "by_city": by_city, "by_city_zh": by_city_zh,
+        "by_remote": by_remote, "by_stage": by_stage,
+        "method_note": "mid=(min+max)/2，基于真实解析区间；n<8 显示为 null；缺失不插补；溢价分语言池计算",
     }, ensure_ascii=False))
 
     # ---- companies.json ----
     comp_counter: Counter = Counter()
     comp_display: dict[str, Counter] = defaultdict(Counter)
     comp_roles: dict[str, Counter] = defaultdict(Counter)
-    for j in ai_jobs:
+    for j in en_jobs:
         cn = j["company_norm"]
         if not cn or len(cn) < 2:
             continue
@@ -318,12 +360,40 @@ def main() -> None:
             "top_roles": comp_roles[cn].most_common(3),
             "is_bigtech_listed": cn in BIG_TECH,
         })
+    # 中文市场：官方渠道（单公司全量 dump）单独列，不进「公司热度」榜；社区榜仅 V2EX
+    official_zh = dict(Counter(j["company_norm"] for j in zh_jobs
+                               if j["source"] in ("tencent", "baidu")))
+    comp_zh_counter: Counter = Counter()
+    comp_zh_display: dict[str, Counter] = defaultdict(Counter)
+    comp_zh_roles: dict[str, Counter] = defaultdict(Counter)
+    for j in zh_jobs:
+        if j["source"] not in ("v2ex",):
+            continue
+        cn = j["company_norm"]
+        if not cn or len(cn) < 2:
+            continue
+        comp_zh_counter[cn] += 1
+        comp_zh_display[cn][j["company"]] += 1
+        comp_zh_roles[cn][j["role"]] += 1
+    companies_zh_payload = []
+    for cn, n in comp_zh_counter.most_common(20):
+        if n < 2:
+            break
+        companies_zh_payload.append({
+            "company": comp_zh_display[cn].most_common(1)[0][0],
+            "norm": cn, "n": n,
+            "top_roles": comp_zh_roles[cn].most_common(3),
+        })
     (OUT / "companies.json").write_text(json.dumps({
-        "note": "公司名来自帖子自述的启发式抽取与归一，可能有残余噪声；n=出现帖次数（含跨月重复招聘）",
+        "note": "公司名来自帖子自述的启发式抽取与归一，可能有残余噪声；n=出现帖次数（含跨月重复招聘）；中文官方渠道（腾讯/百度官网为单公司全量 dump）单列不计入社区热度榜",
         "companies": companies_payload,
+        "zh_official_channels": [{"company": "腾讯（招聘官网）", "norm": "tencent", "n": official_zh.get("腾讯", 0)},
+                                 {"company": "百度（招聘官网）", "norm": "baidu", "n": official_zh.get("百度", 0)}],
+        "companies_zh": companies_zh_payload,
+        "companies_zh_note": "社区榜仅覆盖 V2EX 酷工作近期帖（上游 API 分页失效，存量不可得），样本极小仅示意",
     }, ensure_ascii=False))
 
-    # ---- trend.json（仅 HN 月度帖口径）----
+    # ---- trend.json（仅 HN 月度帖口径；中文源为官网 dump 无可靠月度语义，仅给 zh 计数）----
     months = sorted({j["month"] for j in jobs if j["source"] == "hn" and j["month"]})
     trend = []
     for m in months:
@@ -342,6 +412,7 @@ def main() -> None:
     auxf = ROOT / "data" / "raw" / "misc" / "aux_signals.json"
     if auxf.exists():
         aux = json.loads(auxf.read_text())
+    zh_months = sorted({j["month"] for j in zh_jobs if j["month"]})
     (OUT / "overview.json").write_text(json.dumps({
         "built_from": {"total_posts": len(jobs), "ai_posts": len(ai_jobs),
                        "salary_posts": len(sal_ai),
@@ -352,12 +423,25 @@ def main() -> None:
                               for rid, js in groups.items()],
         "top_skills": skills_payload[:25],
         "aux": aux,
+        "zh": {
+            "posts": len([j for j in jobs if j.get("lang") == "zh"]),
+            "ai_posts": len(zh_jobs),
+            "salary_posts": len(sal_zh),
+            "sources": dict(Counter(j["source"] for j in jobs if j.get("lang") == "zh")),
+            "months": [zh_months[0], zh_months[-1]] if zh_months else [],
+            "role_distribution": [{"role": rid, "name_zh": role_meta.get(rid, {}).get("name_zh",
+                                   "通用 AI / 其他"), "n": len(js), "share": pct(len(js), len(zh_jobs))}
+                                  for rid, js in zh_groups.items()],
+            "top_skills": [s for s in skills_payload if s["count_zh"] > 0][:25],
+        },
     }, ensure_ascii=False))
 
-    print(f"analysis done: ai={len(ai_jobs)} salary_pool={len(sal_ai)} "
-          f"skills={len(skills_payload)} premium_entries={len(premium)}")
+    print(f"analysis done: ai={len(ai_jobs)} (en={len(en_jobs)} zh={len(zh_jobs)}) "
+          f"salary_pool en={len(sal_en)} zh={len(sal_zh)} "
+          f"skills={len(skills_payload)} premium_entries={len(premium)}/{len(premium_zh)}zh")
     print("top premium:", [(d['skill'], d['delta_pct'], d['n_with']) for d in premium[:8]])
     print("bottom premium:", [(d['skill'], d['delta_pct'], d['n_with']) for d in premium[-5:]])
+    print("zh premium:", [(d['skill'], d['delta_pct'], d['n_with']) for d in premium_zh[:6]])
 
 
 if __name__ == "__main__":

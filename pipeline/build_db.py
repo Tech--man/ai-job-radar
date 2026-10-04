@@ -19,29 +19,36 @@ import unicodedata
 from pathlib import Path
 
 from config import FX_TO_USD, SALARY_MAX_USD, SALARY_MIN_USD, parse_xml_safely
-from roles_dict import AI_GATE, AI_GATE_RAW, ROLES
+from roles_dict import AI_GATE, AI_GATE_RAW, AI_GATE_ZH, ROLES
 from skills_dict import SKILLS
+from sql_statements import (DELETE_JOBS, DELETE_META, DDL_IDX_AI, DDL_IDX_MONTH, DDL_IDX_ROLE,
+                            DDL_JOBS, DDL_META, FIELDS, INSERT_SQL, META_INSERT)
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
 DB_PATH = ROOT / "data" / "ai_jobs.sqlite"
 PROCESSED = ROOT / "data" / "processed"
 
-INSERT_SQL = (
-    "INSERT INTO jobs (source, source_id, posted_date, month, company, company_norm, title,"
-    " is_ai, role, roles_all, skills, is_remote, remote_kind, city, country,"
-    " salary_min_usd, salary_max_usd, salary_currency, salary_period, salary_raw, salary_conf,"
-    " text_clean, url, dedup_key)"
-    " VALUES (:source, :source_id, :posted_date, :month, :company, :company_norm, :title,"
-    " :is_ai, :role, :roles_all, :skills, :is_remote, :remote_kind, :city, :country,"
-    " :salary_min_usd, :salary_max_usd, :salary_currency, :salary_period, :salary_raw,"
-    " :salary_conf, :text_clean, :url, :dedup_key)"
-)
-
 # ---------------- 文本清洗 ----------------
 
 TAG_RE = re.compile(r"<[^>]+>")
 WS_RE = re.compile(r"[ \t\f\v]+")
+CJK_RANGE = ("\u4e00", "\u9fff")
+
+
+def has_cjk(s: str) -> bool:
+    return any(CJK_RANGE[0] <= ch <= CJK_RANGE[1] for ch in s)
+
+
+def cjk_ratio(s: str) -> float:
+    if not s:
+        return 0.0
+    cjk = sum(1 for ch in s if CJK_RANGE[0] <= ch <= CJK_RANGE[1])
+    return cjk / max(1, len(s))
+
+
+def detect_lang(text: str) -> str:
+    return "zh" if cjk_ratio(text) > 0.15 else "en"
 
 
 def html_to_text(raw: str) -> str:
@@ -61,7 +68,7 @@ def smart_truncate(text: str, limit: int = 6000) -> str:
 
 # ---------------- 薪资解析 ----------------
 
-CURRENCY_SYMBOLS = {"$": "USD", "€": "EUR", "£": "GBP", "¥": "JPY"}
+CURRENCY_SYMBOLS = {"$": "USD", "€": "EUR", "£": "GBP", "¥": "CNY", "￥": "CNY"}
 CURRENCY_WORDS = {
     "usd": "USD", "eur": "EUR", "gbp": "GBP", "cad": "CAD", "aud": "AUD",
     "nzd": "NZD", "chf": "CHF", "sek": "SEK", "nok": "NOK", "dkk": "DKK",
@@ -70,29 +77,26 @@ CURRENCY_WORDS = {
 }
 
 MONEY_RE = re.compile(
-    r"(?P<cur>[$€£¥]|\b(?:USD|EUR|GBP|CAD|AUD|NZD|CHF|SEK|NOK|DKK|SGD|JPY|INR|CNY|BRL|PLN|CZK)\b)?"
+    r"(?P<cur>[$€£¥￥]|\b(?:USD|EUR|GBP|CAD|AUD|NZD|CHF|SEK|NOK|DKK|SGD|JPY|INR|CNY|RMB)\b|人民币)?"
     r"\s?(?P<amt>\d{1,3}(?:[,.]\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
-    r"\s?(?P<suffix>[kKmM])?"
+    r"\s?(?P<suffix>[kKmMwW]|万)?"
 )
 
 PERIOD_PATTERNS = [
-    (re.compile(r"\b(?:/|per\s+|a\s+)?hr\b|\bhourly\b|\bper\s+hour\b|\ban\s+hour\b", re.I), "hourly"),
-    (re.compile(r"\b(?:/|per\s+|a\s+)?day\b|\bdaily\b", re.I), "daily"),
-    (re.compile(r"\b(?:/|per\s+|a\s+)?mo\b|\bmonthly\b|\bper\s+month\b|\ba\s+month\b", re.I), "monthly"),
-    (re.compile(r"\b(?:/|per\s+|a\s+)?yr\b|\bannual(?:ly)?\b|\bper\s+(?:year|annum)\b|\bsalary\b|\bcomp(?:ensation)?\b", re.I), "annual"),
+    (re.compile(r"\b(?:/|per\s+|a\s+)?hr\b|\bhourly\b|\bper\s+hour\b|\ban\s+hour\b|时薪|/小时|/时", re.I), "hourly"),
+    (re.compile(r"\b(?:/|per\s+|a\s+)?day\b|\bdaily\b|日薪|/天|/日", re.I), "daily"),
+    (re.compile(r"\b(?:/|per\s+|a\s+)?mo\b|\bmonthly\b|\bper\s+month\b|\ba\s+month\b|月薪|/月", re.I), "monthly"),
+    (re.compile(r"\b(?:/|per\s+|a\s+)?yr\b|\bannual(?:ly)?\b|\bper\s+(?:year|annum)\b|\bsalary\b|\bcomp(?:ensation)?\b|年薪|/年|薪资|薪酬|待遇", re.I), "annual"),
 ]
-RANGE_SEP_RE = re.compile(r"\s*(?:-|–|—|to)\s*")
+RANGE_SEP_RE = re.compile(r"\s*(?:-|–|—|to|到|～|~)\s*")
+
+SUFFIX_MULT = {"k": 1e3, "K": 1e3, "m": 1e6, "M": 1e6, "w": 1e4, "W": 1e4, "万": 1e4}
 
 
-def _decode_amount(amt: str, suffix: str | None) -> float | None:
+def _decode_amount(amt: str) -> float | None:
     if re.fullmatch(r"\d{1,3}(?:[,.]\d{3})+(?:\.\d+)?", amt):
         return float(amt.replace(",", ""))
-    val = float(amt)
-    if suffix and suffix.lower() == "k":
-        return val * 1_000
-    if suffix and suffix.lower() == "m":
-        return val * 1_000_000
-    return val
+    return float(amt)
 
 
 def _annualize(value: float, period: str) -> float | None:
@@ -114,24 +118,48 @@ def _period_near(text: str, pos: int, window: int = 45) -> str | None:
     return None
 
 
-def parse_salary(text: str) -> dict | None:
-    """从文本解析薪资区间；失败返回 None（绝不编造）。
+CURRENCY_NEAR_RE = re.compile(
+    r"[$€£¥￥]|\b(?:USD|EUR|GBP|CAD|AUD|NZD|CHF|SEK|NOK|DKK|SGD|JPY|INR|CNY|RMB)\b|人民币|元",
+    re.I)
 
-    约定：带货币符号/代码才解析；纯数字不带货币（如 "150-180"）不解析。
-    100–999 且带货币符号的裸数值按「千」解释（HN 惯例），标记 conf=assumed-k。
+
+def _currency_near(text: str, pos: int, window: int = 60) -> str | None:
+    """在金额附近找显式货币标识（覆盖 '10K–15K CNY' 这类后置写法）。"""
+    seg = text[max(0, pos - window):min(len(text), pos + window)]
+    m = CURRENCY_NEAR_RE.search(seg)
+    if not m:
+        return None
+    tok = m.group(0)
+    return (CURRENCY_SYMBOLS.get(tok)
+            or CURRENCY_WORDS.get(tok.lower())
+            or ("CNY" if tok in ("人民币", "元") else None))
+
+
+def parse_salary(text: str) -> dict | None:
+    """从文本解析薪资区间；不可解析返回 None（绝不编造）。
+
+    英文规则：带货币符号/代码才解析；裸 100–999 数值按「千」惯例（assumed-k）。
+    中文规则（v0.2）：数字带 k/K/万/w/W 后缀即可解析；无显式货币但上下文为中文时
+    推断为 CNY（assumed-cny）；无周期标记时按中文市场惯例视为月薪
+    （assumed-monthly，K/万 = 每月）；显式 /年、年薪则按年。区间两端可共享后缀
+    （"3-5万"、"25-40K"）；"·14薪" 等年终月数剔除。"面议" 无数字，自然缺失。
     """
+    text = re.sub(r"[·•]\s*\d+薪", "", text)
+    ctx_cjk = cjk_ratio(text) > 0.15
     tokens: list[dict] = []
     for m in MONEY_RE.finditer(text):
-        cur = m.group("cur")
-        if not cur:
-            continue  # 无货币标识不解析
-        currency = CURRENCY_SYMBOLS.get(cur) or CURRENCY_WORDS.get(cur.lower(), cur.upper())
-        amt = _decode_amount(m.group("amt"), m.group("suffix"))
-        if amt is None:
+        cur_raw = m.group("cur")
+        suffix = m.group("suffix")
+        raw_val = _decode_amount(m.group("amt"))
+        if raw_val is None:
             continue
+        mult = SUFFIX_MULT.get(suffix) if suffix else None
+        currency = None
+        if cur_raw:
+            currency = CURRENCY_SYMBOLS.get(cur_raw) or CURRENCY_WORDS.get(cur_raw.lower(), cur_raw.upper())
         tokens.append({
-            "pos": m.start(), "end": m.end(), "value": amt, "currency": currency,
-            "suffix": m.group("suffix"), "raw": m.group(0).strip(),
+            "pos": m.start(), "end": m.end(), "raw_val": raw_val,
+            "mult": mult, "currency": currency, "suffix": suffix,
         })
     if not tokens:
         return None
@@ -145,39 +173,48 @@ def parse_salary(text: str) -> dict | None:
             if used[j]:
                 break
             gap = text[t["end"]:tokens[j]["pos"]]
-            if RANGE_SEP_RE.fullmatch(gap.strip()) and tokens[j]["value"] >= t["value"] * 0.8:
+            if RANGE_SEP_RE.fullmatch(gap.strip()) and tokens[j]["raw_val"] >= t["raw_val"] * 0.8:
                 paired = j
                 break
         lo_t, hi_t = (t, tokens[paired]) if paired is not None else (t, t)
         if paired is not None:
             used[paired] = True
         used[i] = True
+        # 单 token：必须有货币或倍率后缀才可信；区间：允许lo 无后缀继承 hi 的
+        if paired is None and t["currency"] is None and t["mult"] is None:
+            continue
+        mult_eff = lo_t["mult"] or (hi_t["mult"] if paired is not None else None)
         conf = "parsed"
-
-        def _scale(x: dict, inherit: float | None) -> float:
-            v = x["value"]
-            if x["suffix"]:
-                return v
-            if inherit is not None:
-                return v * inherit
-            if 100 <= v < 1000:
-                return v * 1_000  # "$150-200" ≈ 千元惯例
-            return v
-
-        inherit_scale = 1_000 if (lo_t["suffix"] and not hi_t["suffix"]) else None
-        lo = _scale(lo_t, None)
-        hi = _scale(hi_t, inherit_scale)
-        if lo_t["suffix"] is None and 100 <= lo_t["value"] < 1000:
+        currency = lo_t["currency"] or (hi_t["currency"] if paired is not None else None)
+        if currency is None:
+            currency = _currency_near(text, lo_t["pos"])
+        if currency is None:
+            if ctx_cjk and mult_eff:
+                currency = "CNY"
+                conf = "assumed-cny"
+            else:
+                continue  # 无货币标识（英文语境）不解析
+        lo = lo_t["raw_val"] * (mult_eff or 1)
+        hi = hi_t["raw_val"] * (mult_eff or 1)
+        if (mult_eff is None and currency != "CNY"
+                and 100 <= lo_t["raw_val"] < 1000):
+            lo *= 1_000  # "$150-200" ≈ 千元惯例（两端均无后缀时才适用）
+            hi *= 1_000
             conf = "assumed-k"
-        period = _period_near(text, lo_t["pos"]) or "annual"
-        cur = lo_t["currency"]
-        lo_usd = _annualize(lo * FX_TO_USD.get(cur, 0), period)
-        hi_usd = _annualize(hi * FX_TO_USD.get(cur, 0), period)
+        explicit_period = _period_near(text, lo_t["pos"])
+        period = explicit_period
+        if period is None:
+            # 中文市场裸 K/万 默认月薪；英文默认年薪
+            period = "monthly" if (currency == "CNY" and mult_eff) else "annual"
+            if currency == "CNY" and mult_eff:
+                conf += "+assumed-monthly"
+        lo_usd = _annualize(lo * FX_TO_USD.get(currency, 0), period)
+        hi_usd = _annualize(hi * FX_TO_USD.get(currency, 0), period)
         if lo_usd is None or not (SALARY_MIN_USD <= lo_usd <= SALARY_MAX_USD):
-            continue  # 明显不是年薪，丢弃（宁缺毋滥）
+            continue  # 不在合理年薪域，丢弃（宁缺毋滥）
         ranges.append({
             "min_usd": round(lo_usd), "max_usd": round(hi_usd or lo_usd),
-            "currency": cur, "period": period, "conf": conf,
+            "currency": currency, "period": period, "conf": conf,
             "raw": text[lo_t["pos"]:hi_t["end"]][:60],
         })
     if not ranges:
@@ -197,6 +234,7 @@ def norm_company(name: str | None) -> str:
         return ""
     n = name.strip().strip("|·,.- ")
     n = LEGAL_SUFFIX_RE.sub("", n)
+    n = re.sub(r"(股份)?有限公司$", "", n)  # 中文法律后缀（v0.2）
     n = re.sub(r"\s+", " ", n)
     return n.lower().strip()
 
@@ -248,10 +286,18 @@ CITIES = {
     "bangalore": ("Bangalore", "IN"), "bengaluru": ("Bangalore", "IN"),
     "hyderabad": ("Hyderabad", "IN"), "pune": ("Pune", "IN"),
     "são paulo": ("São Paulo", "BR"), "sao paulo": ("São Paulo", "BR"),
+    # 中文城市（v0.2）
+    "北京": ("Beijing", "CN"), "上海": ("Shanghai", "CN"), "深圳": ("Shenzhen", "CN"),
+    "广州": ("Guangzhou", "CN"), "杭州": ("Hangzhou", "CN"), "成都": ("Chengdu", "CN"),
+    "南京": ("Nanjing", "CN"), "武汉": ("Wuhan", "CN"), "西安": ("Xi'an", "CN"),
+    "苏州": ("Suzhou", "CN"), "天津": ("Tianjin", "CN"), "合肥": ("Hefei", "CN"),
+    "长沙": ("Changsha", "CN"), "重庆": ("Chongqing", "CN"), "厦门": ("Xiamen", "CN"),
+    "珠海": ("Zhuhai", "CN"), "青岛": ("Qingdao", "CN"), "郑州": ("Zhengzhou", "CN"),
+    "香港": ("Hong Kong", "HK"),
 }
 
-REMOTE_RE = re.compile(r"\bremote\b", re.I)
-HYBRID_RE = re.compile(r"\bhybrid\b", re.I)
+REMOTE_RE = re.compile(r"\bremote\b|远程", re.I)
+HYBRID_RE = re.compile(r"\bhybrid\b|混合办公", re.I)
 
 
 def extract_geo(text: str) -> tuple[str | None, str | None, int, str]:
@@ -287,17 +333,25 @@ def extract_skills(text: str) -> list[str]:
 
 # ---------------- 岗位分类 ----------------
 
+def _kw_re(k: str) -> re.Pattern:
+    """含 CJK 的关键词按子串匹配（\\b 对 CJK 无效），拉丁词加 \\b 词边界。"""
+    if has_cjk(k):
+        return re.compile(re.escape(k))
+    return re.compile(r"\b" + re.escape(k) + r"\b", re.I)
+
+
 ROLE_COMPILED = [
     {
         "id": r["id"],
-        "title": [re.compile(r"\b" + re.escape(k) + r"\b", re.I) for k in r["title_keywords"]],
-        "text": [re.compile(r"\b" + re.escape(k) + r"\b", re.I) for k in r["text_keywords"]]
+        "title": [_kw_re(k) for k in r["title_keywords"] + r.get("title_keywords_zh", [])],
+        "text": [_kw_re(k) for k in r["text_keywords"] + r.get("text_keywords_zh", [])]
                 + [re.compile(p, re.I) for p in r.get("text_keywords_raw", [])],
     }
     for r in ROLES
 ]
-AI_GATE_COMPILED = ([re.compile(r"\b" + re.escape(k) + r"\b", re.I) for k in AI_GATE]
-                    + [re.compile(p, re.I) for p in AI_GATE_RAW])
+AI_GATE_COMPILED = ([_kw_re(k) for k in AI_GATE]
+                    + [re.compile(p, re.I) for p in AI_GATE_RAW]
+                    + [_kw_re(k) for k in AI_GATE_ZH])
 MAX_TEXT_HITS = 8  # 每类正文关键词最多计 8 次，防长文刷分
 
 
@@ -415,26 +469,89 @@ def load_wwr() -> list[dict]:
     return out
 
 
-# ---------------- 入库 ----------------
+def load_v2ex() -> list[dict]:
+    f = RAW / "zh" / "v2ex.json"
+    if not f.exists():
+        return []
+    out = []
+    for t in json.loads(f.read_text()):
+        text = html_to_text(t.get("content") or "")
+        title = html.unescape(t.get("title") or "")
+        if len(text) < 40:
+            continue
+        date = ""
+        if t.get("created"):
+            date = time.strftime("%Y-%m-%d", time.gmtime(int(t["created"])))
+        out.append({
+            "source": "v2ex", "source_id": str(t.get("url", "")),
+            "posted_date": date, "month": date[:7],
+            "company": "", "title": title, "text": text,
+            "url": t.get("url"), "needs_title_parse": True,
+        })
+    return out
 
-DDL_JOBS = "CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, source TEXT NOT NULL, source_id TEXT, posted_date TEXT, month TEXT, company TEXT, company_norm TEXT, title TEXT, is_ai INTEGER, role TEXT, roles_all TEXT, skills TEXT, is_remote INTEGER, remote_kind TEXT, city TEXT, country TEXT, salary_min_usd REAL, salary_max_usd REAL, salary_currency TEXT, salary_period TEXT, salary_raw TEXT, salary_conf TEXT, text_clean TEXT, url TEXT, dedup_key TEXT)"
-DDL_IDX_ROLE = "CREATE INDEX IF NOT EXISTS idx_jobs_role ON jobs(role)"
-DDL_IDX_AI = "CREATE INDEX IF NOT EXISTS idx_jobs_ai ON jobs(is_ai)"
-DDL_IDX_MONTH = "CREATE INDEX IF NOT EXISTS idx_jobs_month ON jobs(month)"
-DDL_META = "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)"
-DELETE_JOBS = "DELETE FROM jobs"
-DELETE_META = "DELETE FROM meta"
-META_INSERT = "INSERT INTO meta (key, value) VALUES (:key, :value)"
 
-FIELDS = ["source", "source_id", "posted_date", "month", "company", "company_norm", "title",
-          "is_ai", "role", "roles_all", "skills", "is_remote", "remote_kind", "city", "country",
-          "salary_min_usd", "salary_max_usd", "salary_currency", "salary_period", "salary_raw",
-          "salary_conf", "text_clean", "url", "dedup_key"]
+def _v2ex_title_parse(title: str, text: str) -> tuple[str, str]:
+    """V2EX 帖标题启发式：[城市] 公司 招职位 / 招聘｜职位｜待遇。"""
+    t = re.sub(r"^\s*[\[【]([^\]】]{1,8})[\]】]\s*", "", title).strip()
+    company = ""
+    m = re.split(r"招(?:聘|人|募)?(?:急招)?", t, maxsplit=1)
+    if m and 2 <= len(m[0].strip()) <= 16 and len(m) > 1:
+        company = m[0].strip(" |-–—/·,，")
+    if not company:
+        parts = re.split(r"[｜|/]", title)
+        if len(parts) >= 2 and 2 <= len(parts[0].strip()) <= 16:
+            company = parts[0].strip()
+    return company, t
+
+
+def load_zh() -> list[dict]:
+    """腾讯/百度官方招聘 + V2EX（v0.2 中文市场）。"""
+    out = []
+    f = RAW / "zh" / "tencent.json"
+    if f.exists():
+        for p in json.loads(f.read_text()):
+            resp = (p.get("Responsibility") or "").strip()
+            if len(resp) < 40:
+                continue
+            loc = p.get("LocationName") or ""
+            title = f"{p.get('RecruitPostName', '')} {loc}".strip()
+            text = f"岗位类别：{p.get('CategoryName', '')}（{p.get('BGName', '')}）\n{resp}"
+            date = (p.get("LastUpdateTime") or "")[:10]
+            out.append({
+                "source": "tencent", "source_id": str(p.get("PostId") or ""),
+                "posted_date": date, "month": date[:7],
+                "company": "腾讯", "title": title, "text": text,
+                "url": f"https://careers.tencent.com/jobdesc.html?postId={p.get('PostId')}",
+            })
+    f = RAW / "zh" / "baidu.json"
+    if f.exists():
+        for p in json.loads(f.read_text()):
+            duty = (p.get("workContent") or "").strip()
+            req = (p.get("serviceCondition") or "").strip()
+            if len(duty) + len(req) < 40:
+                continue
+            loc = (p.get("workPlace") or "").strip()
+            title = f"{p.get('name', '')} {loc}".strip()
+            text = f"工作职责：\n{duty}\n任职要求：\n{req}"
+            date = (p.get("updateDate") or p.get("publishDate") or "")[:10]
+            out.append({
+                "source": "baidu", "source_id": str(p.get("postId") or ""),
+                "posted_date": date, "month": date[:7],
+                "company": "百度", "title": title, "text": text, "url": None,
+            })
+    for r in load_v2ex():
+        company, title_clean = _v2ex_title_parse(r["title"], r["text"])
+        r["company"] = company
+        r["title"] = title_clean
+        r.pop("needs_title_parse", None)
+        out.append(r)
+    return out
 
 
 def main() -> None:
     PROCESSED.mkdir(parents=True, exist_ok=True)
-    rows = load_hn() + load_remoteok() + load_wwr()
+    rows = load_hn() + load_remoteok() + load_wwr() + load_zh()
     print(f"loaded raw posts: {len(rows)}")
     seen: set[str] = set()
     records: list[dict] = []
@@ -445,18 +562,23 @@ def main() -> None:
         sal = r.get("salary_override") or parse_salary(r["text"])
         company_norm = norm_company(r["company"])
         title_norm = re.sub(r"\s+", " ", (r["title"] or "").lower()).strip()
-        dedup_key = hashlib.sha256(
-            f"{r['source']}|{r['month']}|{company_norm}|{title_norm}".encode()).hexdigest()
+        # 官方结构化源以 source_id 去重（同月同题不同岗很常见）；社区帖沿用 月|公司|题
+        if r["source"] in ("tencent", "baidu"):
+            dedup_base = f"{r['source']}|{r['source_id']}"
+        else:
+            dedup_base = f"{r['source']}|{r['month']}|{company_norm}|{title_norm}"
+        dedup_key = hashlib.sha256(dedup_base.encode()).hexdigest()
         if dedup_key in seen:
             continue
         seen.add(dedup_key)
-        rec = dict.fromkeys(FIELDS)
+        rec = dict.fromkeys(FIELDS)  # SQL 列；lang 为 JSON 附加字段
         rec.update({
             **r, "company_norm": company_norm,
             "is_ai": is_ai, "role": role, "roles_all": json.dumps(roles_all),
             "skills": json.dumps(skills),
             "is_remote": is_remote, "remote_kind": remote_kind,
             "city": city, "country": country,
+            "lang": detect_lang((r["title"] or "") + " " + r["text"][:500]),
             "salary_min_usd": sal["min_usd"] if sal else None,
             "salary_max_usd": sal["max_usd"] if sal else None,
             "salary_currency": sal["currency"] if sal else None,

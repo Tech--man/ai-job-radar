@@ -50,13 +50,14 @@ const noise = skills.noise_candidates.filter((n) => n.verdict.includes("噪音")
       <h2 class="font-bold mb-3">{catNames[c]} <span class="muted text-sm font-normal">（{byCat[c].length} 项）</span></h2>
       <div class="card p-2 overflow-x-auto">
         <table class="data">
-          <thead><tr><th>技能</th><th>英文</th><th>出现率</th><th>帖数</th><th>溢价</th><th>薪资样本</th><th>置信度</th></tr></thead>
+          <thead><tr><th>技能</th><th>英文</th><th>出现率</th><th>中文出现率</th><th>帖数</th><th>溢价</th><th>薪资样本</th><th>置信度</th></tr></thead>
           <tbody>
             {byCat[c].map((s) => (
               <tr>
                 <td class="font-medium">{s.name_zh}</td>
                 <td class="muted">{s.name_en}</td>
                 <td class="num">{s.freq_pct}%</td>
+                <td class="num">{s.count_zh > 0 ? `${s.freq_zh_pct}%` : <span class="missing">—</span>}</td>
                 <td class="num">{s.count}</td>
                 <td class="num">
                   {s.delta_pct != null

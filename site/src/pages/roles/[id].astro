@@ -49,6 +49,18 @@ const sal = profile.salary;
           <span class="num muted w-12 text-right">{s.freq_pct}%</span>
         </div>
       ))}
+      {profile.top_skills_zh?.length ? (
+        <div>
+          <h3 class="font-semibold text-sm mt-6 mb-2">中文市场要求 Top（腾讯/百度官网 + V2EX，{profile.n_posts_zh} 帖）</h3>
+          <div class="flex flex-wrap gap-2">
+            {profile.top_skills_zh.map((s) => (
+              <span class="badge">{s.name_zh} <span class="muted">{s.freq_pct}%</span></span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p class="muted text-xs mt-6">该岗位在中文样本中不足 10 帖，暂不给出中文技能排序（不做无样本推断）。</p>
+      )}
     </div>
     <div class="card p-5 md:col-span-2">
       <h2 class="font-bold mb-3">薪资区间（USD 年薪）</h2>

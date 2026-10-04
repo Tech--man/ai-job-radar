@@ -3,6 +3,7 @@ import Base from "../layouts/Base.astro";
 import salary from "../data/salary.json";
 import overview from "../data/overview.json";
 
+const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 const zh = (rid: string) =>
   overview.role_distribution.find((x) => x.role === rid)?.name_zh ??
   ({ "ml-research": "ML 研究", other: "通用 AI / 其他" })[rid] ?? rid;
@@ -27,7 +28,7 @@ const remoteNames = { remote: "远程/可远程", hybrid: "混合", unknown: "�
     占 AI 岗位 {salary.pool_share}%。没有披露薪资的帖子：<b>不插补、不推算、不编造</b>，
     凡样本 &lt; 8 的维度一律显示「样本不足」。
   </p>
-  <p class="muted text-xs mb-8">口径提醒：非美元薪资按静态汇率粗略折算（详见方法与来源页）；股票/期权不计入；时薪按 1750 小时/年折算。自述薪资存在虚报与选择性披露，读数请当「区间感」而非精确行情。</p>
+  <p class="muted text-xs mb-8">口径提醒：非美元薪资按静态汇率粗略折算（详见方法与来源页）；股票/期权不计入；时薪按 1750 小时/年折算；中文市场裸 K/万 按月薪口径解读后年化。自述薪资存在虚报与选择性披露，读数请当「区间感」而非精确行情。中文市场薪资覆盖极低，单独说明见<a class="accent" href={B + "zh-market"}>中文市场页</a>。</p>
 
   <section class="card p-5 mb-8">
     <h2 class="font-bold mb-3">按岗位</h2>

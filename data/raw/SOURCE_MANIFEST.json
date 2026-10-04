@@ -49,5 +49,32 @@
   "fetched_at": "2026-10-04T00:31:06+0800",
   "license_note": "public APIs; GitHub data under each repo's license; arXiv metadata under arXiv ToS",
   "file": "data/raw/misc/aux_signals.json"
+ },
+ {
+  "source": "腾讯招聘官网 API",
+  "url": "https://careers.tencent.com/tencentcareer/api/post/Query (GET, keywords=AI,大模型,LLM,算法)",
+  "fetched_at": "2026-10-04T10:19:37+0800",
+  "records": 950,
+  "robots": "robots.txt 返回 302 HTML，视同缺失 → 允许（RFC9309）；公开 GET 接口，低频单次",
+  "license_note": "公司公开招聘页；仅聚合统计用途",
+  "file": "data/raw/zh/tencent.json"
+ },
+ {
+  "source": "百度招聘官网 API",
+  "url": "https://talent.baidu.com/httservice/getPostList (POST form, keywords=大模型,LLM,算法,AI)",
+  "fetched_at": "2026-10-04T10:19:37+0800",
+  "records": 954,
+  "robots": "robots.txt 404 视同缺失 → 允许（RFC9309）；公开页面同款接口，低频单次",
+  "license_note": "公司公开招聘页；仅聚合统计用途",
+  "file": "data/raw/zh/baidu.json"
+ },
+ {
+  "source": "V2EX 酷工作",
+  "url": "https://www.v2ex.com/api/topics/show.json?node_name=jobs + /feed/jobs.xml",
+  "fetched_at": "2026-10-04T10:19:37+0800",
+  "records": 10,
+  "robots": "robots.txt 允许 /api 与 /feed（Disallow 仅 backstage/signin/signout/settings）",
+  "license_note": "社区公开帖；不采集作者字段；上游 v1 API 分页失效，仅最新一页 + RSS",
+  "file": "data/raw/zh/v2ex.json"
  }
 ]
