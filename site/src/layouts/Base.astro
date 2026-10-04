@@ -3,14 +3,14 @@ const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 const nav = [
   ["总览", ""],
   ["岗位画像", "roles/llm-app"],
-  ["技能图谱", "skills"],
+  ["技能", "skills"],
   ["薪资", "salary"],
-  ["公司热度", "companies"],
+  ["公司", "companies"],
   ["中文市场", "zh-market"],
-  ["路线生成器", "radar"],
+  ["路线生成", "radar"],
   ["研究报告", "report"],
-  ["晨间简报", "briefing"],
-  ["方法与来源", "about"],
+  ["简报", "briefing"],
+  ["方法", "about"],
 ];
 const path = Astro.url.pathname;
 function isActive(href: string) {
@@ -24,28 +24,29 @@ function isActive(href: string) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="AI 职业行情雷达：基于公开数据的 AI 岗位需求、技能溢价、薪资区间与转型路线生成器" />
-    <title>AI 职业行情雷达 · AI Job Radar</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>" />
+    <meta name="description" content="AI 行情雷达：公开数据驱动的 AI 岗位需求、技能溢价、薪资区间与转型路径研究" />
+    <title>AI 行情雷达 · 岗位、技能与薪资的公开数据研究</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23b03a26'/><rect x='6' y='20' width='4' height='6' fill='white'/><rect x='14' y='12' width='4' height='14' fill='white'/><rect x='22' y='6' width='4' height='20' fill='white'/></svg>" />
   </head>
   <body class="min-h-screen antialiased">
-    <header class="sticky top-0 z-50 backdrop-blur bg-[#0b1020]/85 border-b border-white/10">
-      <nav class="mx-auto max-w-6xl px-4 h-14 flex items-center gap-1 overflow-x-auto whitespace-nowrap text-sm">
-        <a href={B} class="font-bold mr-2 shrink-0">📡 AI 行情雷达</a>
+    <header class="site-head sticky top-0 z-40">
+      <nav class="mx-auto max-w-6xl px-4 h-[52px] flex items-center gap-5 overflow-x-auto whitespace-nowrap text-[13.5px] nav-scroll">
+        <a href={B} class="wordmark shrink-0 mr-1">AI 行情雷达<span class="mark">.</span></a>
         {nav.map(([label, href]) => (
           <a href={B + href}
-             class={`px-2.5 py-1.5 rounded-lg shrink-0 ${isActive(href) ? "bg-white/10 text-white" : "text-[var(--muted)] hover:text-white"}`}>{label}</a>
+             class={`shrink-0 py-1 ${isActive(href) ? "on" : "muted hover:text-[var(--ink)]"}`}
+             style={isActive(href) ? "border-bottom:2px solid var(--accent)" : ""}>{label}</a>
         ))}
       </nav>
     </header>
-    <main class="mx-auto max-w-6xl px-4 py-8">
+    <main class="mx-auto max-w-6xl px-4">
       <slot />
     </main>
-    <footer class="border-t border-white/10 mt-16">
-      <div class="mx-auto max-w-6xl px-4 py-8 text-xs muted space-y-2">
-        <p>数据来源：Hacker News「Who is hiring?」（Algolia API）、RemoteOK API、WeWorkRemotely RSS、腾讯/百度招聘官网公开接口、V2EX 酷工作、GitHub/arXiv/Hugging Face 公开 API。抓取时间 2026-10-04，robots 已逐一核验，遵守各来源条款。</p>
-        <p>薪资来自帖子自述区间的解析，仅覆盖约 1/4 样本；缺失即标注，不插补、不编造。本站为研究性 MVP，不构成求职或招聘建议。</p>
-        <p><a class="accent" href={B + "about"}>方法论与免责声明</a> · Pipeline 与数据集见 GitHub 仓库 · Built with Astro + Tailwind + ECharts</p>
+    <footer class="mt-20 border-t border-[var(--line-strong)]">
+      <div class="mx-auto max-w-6xl px-4 py-8 text-[12px] muted space-y-1.5 leading-relaxed">
+        <p>数据来源：Hacker News「Who is hiring?」、RemoteOK、We Work Remotely、腾讯与百度招聘官网、BOSS直聘（站主本人账号授权切片）、V2EX、GitHub、arXiv、Hugging Face。抓取 2026-10-04，robots 逐一核验。</p>
+        <p>薪资来自帖子自述区间的解析，仅覆盖部分样本；缺失即标注，不插补、不编造。红涨绿跌。研究性项目，不构成求职或招聘建议。</p>
+        <p><a class="accent" href={B + "about"}>方法与数据来源</a> · <a class="accent" href="https://github.com/Tech--man/ai-job-radar">GitHub 仓库</a></p>
       </div>
     </footer>
   </body>

@@ -5,8 +5,8 @@ const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 <Base>
   <h1 class="text-3xl font-extrabold mb-6">方法、数据来源与免责声明</h1>
 
-  <section class="card p-5 mb-6">
-    <h2 class="font-bold mb-2">一句话方法论</h2>
+  <section class="sec">
+    <h2>一句话方法论</h2>
     <p class="text-sm leading-relaxed">
       抓取公开岗位帖（HN「Who is hiring?」13 期 + RemoteOK + WeWorkRemotely）→ 规则清洗与去重 →
       正则技能字典抽取（101 项）→ 关键词分类到 10 类岗位（含 AI 相关性门槛）→
@@ -15,8 +15,8 @@ const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
     </p>
   </section>
 
-  <section class="card p-5 mb-6">
-    <h2 class="font-bold mb-2">数据来源（均为公开合规渠道）</h2>
+  <section class="sec">
+    <h2>数据来源（均为公开合规渠道）</h2>
     <div class="overflow-x-auto">
       <table class="data">
         <thead><tr><th>来源</th><th>方式</th><th>用途</th><th>条款遵守</th></tr></thead>
@@ -29,15 +29,15 @@ const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
           <tr><td>V2EX 酷工作</td><td>公开 API + RSS（最新 10 帖）</td><td>中文社区切片</td><td>robots 允许 /api 与 /feed；不采集作者字段；上游分页失效故存量不可得</td></tr>
           <tr><td>BOSS直聘（用户授权采集）</td><td>列表 JSON 接口，站主本人账号授权、低频（4-6.5s、频控即停），关键词「大模型」切片 120 帖</td><td>中文市场薪资主样本（100% 自带区间）+ 平台公司榜</td><td>robots 对查询路径的爬虫禁令已如实记录；本人账号会话、仅列表聚合字段；HR 个人信息（boss* 字段）入库前剔除；来源方可随时要求移除</td></tr>
           <tr><td>GitHub / arXiv / Hugging Face</td><td>公开 API（生态热度佐证）</td><td>开源生态与研究热度参考</td><td>公开 API 限额内使用</td></tr>
-          <tr><td>未采集</td><td>BOSS 直聘/拉勾/猎聘/智联（登录墙+强反爬）、字节/美团（需会话）</td><td>—</td><td>按「不碰登录墙、不碰反爬严格站点」约束主动放弃</td></tr>
+          <tr><td>未采集</td><td>拉勾/猎聘/智联（登录墙+强反爬）、字节/美团（需会话）</td><td>无</td><td>按「不碰登录墙、不碰反爬严格站点」约束主动放弃（BOSS 后经站主本人账号授权采集，见上行）</td></tr>
         </tbody>
       </table>
     </div>
     <p class="muted text-xs mt-2">完整溯源（URL、抓取时间、记录数、条款说明）见仓库 <code>data/raw/SOURCE_MANIFEST.json</code>。</p>
   </section>
 
-  <section class="card p-5 mb-6">
-    <h2 class="font-bold mb-2">关键口径定义</h2>
+  <section class="sec">
+    <h2>关键口径定义</h2>
     <ul class="text-sm list-disc pl-5 space-y-2">
       <li><b>AI 相关岗位</b>：帖子标题或正文命中 AI 门槛关键词（LLM/GPT/agent/AI 等，整词匹配），且至少分类到任一岗位族得分 ≥ 3。未达门槛标记 non-ai。</li>
       <li><b>技能出现率</b>：正则字典（含别名，见 <code>pipeline/skills_dict.py</code>，可逐条溯源）在帖文本中的命中比例。规则抽取存在漏检/误检，读数看趋势而非绝对值。</li>
@@ -52,8 +52,8 @@ const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
     </ul>
   </section>
 
-  <section class="card p-5 mb-6">
-    <h2 class="font-bold mb-2">已知局限</h2>
+  <section class="sec">
+    <h2>已知局限</h2>
     <ul class="text-sm list-disc pl-5 space-y-2">
       <li>样本偏英文技术社区（HN 为主）；中文市场覆盖腾讯/百度官网、BOSS直聘授权切片与 V2EX，BOSS 样本受平台频控限制（仅「大模型」关键词前几页），拉勾/猎聘/智联未采集，<b>中文读数不能外推为全市场</b>。</li>
       <li>中文薪资主要来自 BOSS 授权切片（列表必显薪资），官网渠道不披露；中文溢价基于约百条样本，置信度低，仅作方向参考。</li>
@@ -64,16 +64,16 @@ const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
     </ul>
   </section>
 
-  <section class="card p-5 mb-6">
-    <h2 class="font-bold mb-2">复现步骤</h2>
+  <section class="sec">
+    <h2>复现步骤</h2>
     <pre class="text-xs bg-black/30 rounded-lg p-4 overflow-x-auto leading-relaxed">cd pipeline
 python3 fetch_hn.py && python3 fetch_remoteok.py && python3 fetch_wwr.py && python3 fetch_aux.py
 python3 build_db.py && python3 analyze.py && python3 export_web.py && python3 fetch_echarts.py
 cd ../site && npm install && npm run build   # 产物在 site/dist/</pre>
   </section>
 
-  <section class="card p-5">
-    <h2 class="font-bold mb-2">免责声明</h2>
+  <section class="sec">
+    <h2>免责声明</h2>
     <p class="text-sm leading-relaxed">
       本项目为个人研究性 MVP，仅供学习参考，不构成求职、招聘、投资建议。所有岗位内容版权归原作者与发布平台所有；
       数据仅以聚合统计形式呈现，不存储作者个人身份信息。若你是数据来源方并希望退出本数据集，请提 issue 即可移除。

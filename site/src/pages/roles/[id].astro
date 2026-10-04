@@ -12,128 +12,139 @@ const profile = p.default;
 const intro = roadmaps.intros[id] ?? "";
 const route = roadmaps.routes[id];
 const B = import.meta.env.BASE_URL.replace(/\/?$/, "/");
-const allIds = ["llm-app", "agent", "rag", "mlops", "ai-pm", "data-eng"];
-const names = Object.fromEntries(allIds.map((x) => [x, roadmaps.routes[x] ? x : x]));
 const zhName = (x: string) =>
-  ({ "llm-app": "LLM 应用", "agent": "Agent", "rag": "RAG", "mlops": "Infra/MLOps", "ai-pm": "AI 产品", "data-eng": "数据工程" })[x] ?? x;
+  ({ "llm-app": "LLM 应用", "agent": "Agent", "rag": "RAG", "mlops": "Infra / MLOps", "ai-pm": "AI 产品", "data-eng": "数据工程" })[x] ?? x;
 
-function k(v: number | null) {
-  return v == null ? "—" : "$" + Math.round(v / 1000) + "k";
-}
+function k(v: number | null) { return v == null ? "无读数" : "$" + Math.round(v / 1000) + "k"; }
 const sal = profile.salary;
+const maxFreq = profile.top_skills[0]?.freq_pct ?? 100;
 ---
 <Base>
-  <p class="muted text-sm mb-2"><a class="accent" href={B}>总览</a> / 岗位画像</p>
-  <section class="mb-8">
-    <div class="flex flex-wrap items-baseline gap-3">
-      <h1 class="text-3xl font-extrabold">{profile.name_zh}</h1>
-      <span class="muted text-sm">{profile.name_en}</span>
-    </div>
-    <p class="mt-3 max-w-3xl leading-relaxed">{intro}</p>
-    <div class="flex flex-wrap gap-3 mt-4 text-sm">
-      <span class="badge">样本 {profile.n_posts} 帖（多标签口径）</span>
-      <span class="badge">占 AI 岗位 {profile.share_of_ai}%</span>
-      <span class="badge">远程提及 {profile.remote_ratio}%</span>
-    </div>
+  <section class="pt-12 pb-8 md:pt-16">
+    <p class="muted text-[13px] mb-3"><a class="accent" href={B}>总览</a> / 岗位画像</p>
+    <h1 class="text-[32px] md:text-[44px] font-extrabold leading-tight tracking-tight">{profile.name_zh}</h1>
+    <p class="muted text-[13px] mt-1">{profile.name_en}</p>
+    <p class="mt-4 max-w-[68ch] text-[14.5px] leading-relaxed">{intro}</p>
+    <p class="muted text-[12.5px] mt-4">
+      样本 {profile.n_posts} 帖（多标签口径，占 AI 岗位 {profile.share_of_ai}%） ·
+      远程提及 {profile.remote_ratio}%
+    </p>
   </section>
 
-  <section class="grid md:grid-cols-5 gap-6 mb-8">
-    <div class="card p-5 md:col-span-3">
-      <h2 class="font-bold mb-3">要求什么技能（按出现频率）</h2>
-      {profile.top_skills.slice(0, 15).map((s) => (
-        <div class="flex items-center gap-3 py-1.5 border-b border-white/5 text-sm">
-          <span class="w-36 md:w-44 shrink-0 truncate">{s.name_zh}</span>
-          <div class="flex-1 h-2 rounded bg-white/5 overflow-hidden">
-            <div class="h-full rounded" style={`width:${Math.min(100, s.freq_pct * 2)}%;background:var(--accent)`}></div>
+  <section class="sec grid md:grid-cols-5 gap-x-12 gap-y-10">
+    <div class="md:col-span-3">
+      <h2>要求什么技能</h2>
+      <p class="note">按出现频率，取前 15。完整技能对照见<a class="accent" href={B + "skills"}>技能图谱</a>。</p>
+      <div class="divide-y divide-[var(--line)]">
+        {profile.top_skills.slice(0, 15).map((s) => (
+          <div class="py-2">
+            <div class="flex justify-between items-baseline text-[13.5px]">
+              <span>{s.name_zh}</span>
+              <span class="num muted">{s.freq_pct}%</span>
+            </div>
+            <div class="bar-track mt-1"><div class="bar-fill" style={`width:${Math.round((s.freq_pct / maxFreq) * 100)}%`}></div></div>
           </div>
-          <span class="num muted w-12 text-right">{s.freq_pct}%</span>
-        </div>
-      ))}
+        ))}
+      </div>
       {profile.top_skills_zh?.length ? (
-        <div>
-          <h3 class="font-semibold text-sm mt-6 mb-2">中文市场要求 Top（腾讯/百度官网 + V2EX，{profile.n_posts_zh} 帖）</h3>
-          <div class="flex flex-wrap gap-2">
-            {profile.top_skills_zh.map((s) => (
-              <span class="badge">{s.name_zh} <span class="muted">{s.freq_pct}%</span></span>
-            ))}
-          </div>
+        <div class="mt-10">
+          <h3 class="font-bold text-[14px] mb-1">中文市场要求 Top</h3>
+          <p class="note">腾讯、百度官网与 BOSS 切片，{profile.n_posts_zh} 帖。</p>
+          <p class="text-[13.5px] leading-loose">
+            {profile.top_skills_zh.map((s) => `${s.name_zh} ${s.freq_pct}%`).join("，")}
+          </p>
         </div>
       ) : (
-        <p class="muted text-xs mt-6">该岗位在中文样本中不足 10 帖，暂不给出中文技能排序（不做无样本推断）。</p>
+        <p class="muted text-[12.5px] mt-10">该岗位在中文样本中不足 10 帖，不给中文技能排序。</p>
       )}
     </div>
-    <div class="card p-5 md:col-span-2">
-      <h2 class="font-bold mb-3">薪资区间（USD 年薪）</h2>
+
+    <div class="md:col-span-2">
+      <h2>薪资区间</h2>
+      <p class="note">USD 年薪，区间中值口径。</p>
       {sal.median_mid ? (
         <div>
-          <div class="text-3xl font-extrabold num">{k(sal.median_mid)}</div>
-          <div class="muted text-sm mt-1">中位（区间中值口径）</div>
-          <div class="mt-4 space-y-1 text-sm num">
-            <div class="flex justify-between"><span class="muted">P25–P75</span><span>{k(sal.p25_mid)} – {k(sal.p75_mid)}</span></div>
-            <div class="flex justify-between"><span class="muted">区间下限中位</span><span>{k(sal.median_min)}</span></div>
-            <div class="flex justify-between"><span class="muted">区间上限中位</span><span>{k(sal.median_max)}</span></div>
-          </div>
+          <div class="num text-[40px] font-semibold leading-none mt-2" style="color:var(--accent)">{k(sal.median_mid)}</div>
+          <div class="muted text-[12.5px] mt-2">中位 · P25 至 P75：<span class="num">{k(sal.p25_mid)} 至 {k(sal.p75_mid)}</span></div>
+          <table class="data mt-6">
+            <tbody>
+              <tr><td class="muted">区间下限中位</td><td class="num">{k(sal.median_min)}</td></tr>
+              <tr><td class="muted">区间上限中位</td><td class="num">{k(sal.median_max)}</td></tr>
+              <tr><td class="muted">有薪资样本</td><td class="num">{sal.n} 帖（覆盖率 {sal.salary_available_share}%）</td></tr>
+            </tbody>
+          </table>
         </div>
       ) : (
-        <div class="missing">样本 &lt; 8，无法给出可靠中位数 —— 不编造</div>
+        <p class="missing text-[13.5px] mt-2">样本不足 8，无法给出可靠中位数。缺失不编造。</p>
       )}
-      <div class="muted text-xs mt-4 space-y-1">
-        <div>有薪资样本：{sal.n} 帖（覆盖率 {sal.salary_available_share}%）</div>
-        <div>其余帖子未披露可解析薪资，本站不插补。</div>
-      </div>
+
+      <h3 class="font-bold text-[14px] mt-10 mb-2">城市分布</h3>
+      {profile.cities.length ? (
+        <p class="text-[13.5px] leading-loose">
+          {profile.cities.map(([c, n]) => `${c} ${n}`).join("，")}
+        </p>
+      ) : <p class="muted text-[13px]">样本中未解析到城市（多为远程或未注明）。</p>}
+
+      <h3 class="font-bold text-[14px] mt-8 mb-2">招聘公司</h3>
+      {profile.top_companies.length ? (
+        <p class="text-[13.5px] leading-loose">
+          {profile.top_companies.map((c) => `${c.company} ${c.n}`).join("，")}
+        </p>
+      ) : <p class="muted text-[13px]">样本量小，无出现两次以上的公司。</p>}
     </div>
   </section>
 
-  <section class="grid md:grid-cols-2 gap-6 mb-8">
-    <div class="card p-5">
-      <h2 class="font-bold mb-3">城市分布（帖内提及）</h2>
-      {profile.cities.length ? (
-        <div class="flex flex-wrap gap-2">
-          {profile.cities.map(([c, n]) => <span class="badge">{c} <span class="muted">{n}</span></span>)}
-        </div>
-      ) : <p class="muted text-sm">样本中未解析到城市（多为远程/未注明）。</p>}
-      <h2 class="font-bold mt-6 mb-3">招聘公司 Top（帖次数）</h2>
-      {profile.top_companies.length ? (
-        <div class="flex flex-wrap gap-2">
-          {profile.top_companies.map((c) => <span class="badge">{c.company} <span class="muted">{c.n}</span></span>)}
-        </div>
-      ) : <p class="muted text-sm">样本量小，无 ≥2 帖的公司。</p>}
+  <section class="sec grid md:grid-cols-2 gap-x-12 gap-y-10">
+    <div>
+      <h2>与相邻岗位的重合度</h2>
+      <p class="note">技能集 Jaccard 相似度。重合度高意味着转型成本低，可作跳板。</p>
+      <div class="divide-y divide-[var(--line)]">
+        {Object.entries(profile.overlap).sort((a, b) => b[1] - a[1]).map(([other, v]) => (
+          <div class="py-2.5">
+            <div class="flex justify-between items-baseline text-[13.5px]">
+              <a class="font-medium hover:text-[var(--accent)]" href={`${B}roles/${other}`}>{zhName(other)}</a>
+              <span class="num muted">{Math.round(v * 100)}%</span>
+            </div>
+            <div class="bar-track mt-1"><div class="bar-fill" style={`width:${Math.round(v * 100)}%;background:var(--accent)`}></div></div>
+          </div>
+        ))}
+      </div>
     </div>
-    <div class="card p-5">
-      <h2 class="font-bold mb-3">真实岗位标题样本</h2>
-      <ul class="space-y-2 text-sm">
+    <div>
+      <h2>真实岗位标题样本</h2>
+      <p class="note">原帖自述，未改写。</p>
+      <ul class="divide-y divide-[var(--line)]">
         {profile.sample_titles.map((t) => (
-          <li class="border-l-2 border-white/10 pl-3">
+          <li class="py-2.5 text-[13.5px]">
             <div>{t.title}</div>
-            <div class="muted text-xs">{t.company || "（未注明公司）"} · {t.source}</div>
+            <div class="muted text-[12px] mt-0.5">{t.company || "未注明公司"} · 来源 {t.source}</div>
           </li>
         ))}
       </ul>
     </div>
   </section>
 
-  <section class="grid md:grid-cols-2 gap-6 mb-8">
-    <div class="card p-5">
-      <h2 class="font-bold mb-3">与相邻岗位的技能重合度（Jaccard）</h2>
-      {Object.entries(profile.overlap).sort((a, b) => b[1] - a[1]).map(([other, v]) => (
-        <div class="flex items-center gap-3 py-1.5 text-sm border-b border-white/5">
-          <a class="accent w-28 shrink-0" href={`${B}roles/${other}`}>{zhName(other)}</a>
-          <div class="flex-1 h-2 rounded bg-white/5 overflow-hidden">
-            <div class="h-full rounded bg-[var(--accent2)]" style={`width:${v * 100}%`}></div>
-          </div>
-          <span class="num muted w-10 text-right">{Math.round(v * 100)}%</span>
-        </div>
-      ))}
-      <p class="muted text-xs mt-3">重合度高 = 转型成本低：可优先考虑相邻岗位作为跳板。</p>
-    </div>
-    <div class="card p-5">
-      <h2 class="font-bold mb-3">转型路线速览（8 周）</h2>
-      <ol class="space-y-1.5 text-sm">
+  <section class="sec grid md:grid-cols-2 gap-x-12 gap-y-10">
+    <div>
+      <h2>转型路线（8 周）</h2>
+      <p class="note">技能优先级来自本数据集，计划本身为策划内容。</p>
+      <ol class="divide-y divide-[var(--line)]">
         {route.weeks.map((w) => (
-          <li><span class="num muted mr-2">W{w.week}</span>{w.theme}</li>
+          <li class="py-2.5 text-[13.5px] flex gap-4">
+            <span class="num muted shrink-0 w-8">W{w.week}</span>
+            <span>{w.theme}</span>
+          </li>
         ))}
       </ol>
-      <a class="inline-block mt-4 px-4 py-2 rounded-lg bg-[var(--accent)] text-[#06122e] font-semibold text-sm" href={`${B}radar?role=${id}`}>为我校定完整路线 →</a>
+      <a class="btn mt-5" href={`${B}radar?role=${id}`}>生成完整路线</a>
+    </div>
+    <div>
+      <h2>这个岗位的核心要求</h2>
+      <p class="note">来自路线库的 core skills，与上方数据互为印证。</p>
+      <p class="text-[13.5px] leading-loose">
+        {route.core_skills.map((s) => s).join(" · ")}
+      </p>
+      <p class="muted text-[12.5px] mt-3">加分项：{route.nice_to_have.join(" · ")}</p>
     </div>
   </section>
 </Base>

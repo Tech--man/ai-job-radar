@@ -17,55 +17,58 @@ const zh = (id: string) => meta[id]?.name_zh ?? id;
 const noise = skills.noise_candidates.filter((n) => n.verdict.includes("噪音"));
 ---
 <Base>
-  <h1 class="text-3xl font-extrabold mb-3">技能图谱</h1>
-  <p class="muted max-w-3xl leading-relaxed mb-8">
-    共 {skills.skills.length} 项技能在本期 {skills.total_ai_jobs.toLocaleString()} 条 AI 岗位帖中被正则字典命中。
-    「溢价」一列 = 该技能岗位的薪资中位数差（相对同池无该技能岗位），n 为薪资样本数；样本不足会显式标注，绝不编造。
-  </p>
+  <section class="pt-12 pb-2 md:pt-16">
+    <h1 class="text-[32px] md:text-[44px] font-extrabold leading-tight tracking-tight">技能图谱</h1>
+    <p class="muted mt-4 max-w-[70ch] text-[14.5px] leading-relaxed">
+      共 {skills.skills.length} 项技能在 {skills.total_ai_jobs.toLocaleString()} 条 AI 岗位帖中被正则字典命中。
+      溢价 = 含该技能岗位的薪资中位数差（同池对比），n 为薪资样本数；样本不足显式标注，不做推断。
+    </p>
+  </section>
 
-  <section class="grid md:grid-cols-2 gap-6 mb-10">
-    <div class="card p-5">
-      <h2 class="font-bold mb-3">技能共现 Top 15（同时出现在同一岗位帖）</h2>
+  <section class="sec grid md:grid-cols-2 gap-x-12 gap-y-10">
+    <div>
+      <h2>技能共现 Top 15</h2>
+      <p class="note">同时出现在同一岗位帖中的技能对。</p>
       <div id="chart-pairs" class="h-96"></div>
     </div>
-    <div class="card p-5">
-      <h2 class="font-bold mb-3">噪音技能候选（高 Mention × 低溢价 × 低区分度）</h2>
+    <div>
+      <h2>噪音技能候选</h2>
+      <p class="note">高提及 × 溢价近零 × 岗位区分度低。指「不构成差异化」，不等于不需要。</p>
       {noise.length ? noise.map((n) => (
-        <div class="py-2 border-b border-white/5 text-sm">
+        <div class="py-2 border-b border-[var(--line)] text-[13.5px]">
           <div class="flex justify-between"><span>{zh(n.skill)}</span><span class="num muted">出现 {n.freq_pct}% · 溢价 {n.delta_pct}%</span></div>
-          <div class="muted text-xs mt-0.5">{n.verdict}</div>
+          <div class="muted text-[12px] mt-0.5">{n.verdict}</div>
         </div>
-      )) : <p class="muted text-sm">本期语料中未发现同时满足三个噪音条件的技能（详见研究报告的宽松口径列表）。</p>}
-      <h2 class="font-bold mt-6 mb-3">无法判定溢价的常见技能</h2>
-      <div class="flex flex-wrap gap-2">
-        {skills.skills.filter((s) => s.confidence === "insufficient" && s.count >= 10).slice(0, 14).map((s) => (
-          <span class="badge badge-mute">{s.name_zh} <span class="muted">n&lt;{8}</span></span>
-        ))}
-      </div>
+      )) : <p class="muted text-[13px]">本期语料中未发现同时满足三个噪音条件的技能（详见研究报告的宽松口径列表）。</p>}
+      <h3 class="font-bold text-[14px] mt-8 mb-2">无法判定溢价的常见技能</h3>
+      <p class="muted text-[12.5px] mb-2">薪资样本不足，只给出现率不给溢价结论。</p>
+      <p class="text-[13px] leading-loose">
+        {skills.skills.filter((s) => s.confidence === "insufficient" && s.count >= 10).slice(0, 14).map((s) => s.name_zh).join("，")}
+      </p>
     </div>
   </section>
 
   {catOrder.map((c) => (
-    <section class="mb-8">
-      <h2 class="font-bold mb-3">{catNames[c]} <span class="muted text-sm font-normal">（{byCat[c].length} 项）</span></h2>
-      <div class="card p-2 overflow-x-auto">
+    <section class="sec">
+      <h2>{catNames[c]} <span class="muted text-[12.5px] font-normal">（{byCat[c].length} 项）</span></h2>
+      <div class="overflow-x-auto">
         <table class="data">
-          <thead><tr><th>技能</th><th>英文</th><th>出现率</th><th>中文出现率</th><th>帖数</th><th>溢价</th><th>薪资样本</th><th>置信度</th></tr></thead>
+          <thead><tr><th>技能</th><th>英文</th><th class="num">出现率</th><th class="num">中文出现率</th><th class="num">帖数</th><th class="num">溢价</th><th class="num">薪资样本</th><th>置信度</th></tr></thead>
           <tbody>
             {byCat[c].map((s) => (
               <tr>
                 <td class="font-medium">{s.name_zh}</td>
                 <td class="muted">{s.name_en}</td>
                 <td class="num">{s.freq_pct}%</td>
-                <td class="num">{s.count_zh > 0 ? `${s.freq_zh_pct}%` : <span class="missing">—</span>}</td>
+                <td class="num">{s.count_zh > 0 ? `${s.freq_zh_pct}%` : <span class="missing">无样本</span>}</td>
                 <td class="num">{s.count}</td>
                 <td class="num">
                   {s.delta_pct != null
-                    ? <span class={`badge ${s.delta_pct > 5 ? "badge-up" : s.delta_pct < -5 ? "badge-down" : "badge-mute"}`}>{s.delta_pct > 0 ? "+" : ""}{s.delta_pct}%</span>
+                    ? <span class={s.delta_pct > 5 ? "up" : s.delta_pct < -5 ? "down" : ""}>{s.delta_pct > 0 ? "+" : ""}{s.delta_pct}%</span>
                     : <span class="missing">样本不足</span>}
                 </td>
-                <td class="num">{s.n_with || "—"}</td>
-                <td class="muted">{s.confidence === "insufficient" ? "—" : { low: "低", medium: "中", high: "高" }[s.confidence]}</td>
+                <td class="num">{s.n_with || "无"}</td>
+                <td class="muted">{s.confidence === "insufficient" ? "无" : { low: "低", medium: "中", high: "高" }[s.confidence]}</td>
               </tr>
             ))}
           </tbody>
@@ -74,11 +77,11 @@ const noise = skills.noise_candidates.filter((n) => n.verdict.includes("噪音")
     </section>
   ))}
 
-  <section class="card p-5">
-    <h2 class="font-bold mb-2">共现明细</h2>
-    <div class="flex flex-wrap gap-2 text-sm">
-      {pairs.map((p2) => <span class="badge">{zh(p2.a)} × {zh(p2.b)} <span class="muted">{p2.n}</span></span>)}
-    </div>
+  <section class="sec">
+    <h2>共现明细</h2>
+    <p class="text-[13px] leading-loose">
+      {pairs.map((p2) => `${zh(p2.a)} 与 ${zh(p2.b)}（${p2.n}）`).join("，")}
+    </p>
   </section>
 </Base>
 
@@ -88,17 +91,23 @@ const noise = skills.noise_candidates.filter((n) => n.verdict.includes("噪音")
     const namesEl = document.getElementById("pair-names");
     const names = namesEl ? JSON.parse(namesEl.textContent) : {};
     if (!window.echarts) return;
+    const css = getComputedStyle(document.documentElement);
+    const C = {
+      ink: css.getPropertyValue("--ink").trim() || "#211f1c",
+      muted: css.getPropertyValue("--muted").trim() || "#716e66",
+      accent: css.getPropertyValue("--accent").trim() || "#b03a26",
+    };
     const el = document.getElementById("chart-pairs");
     const c = echarts.init(el);
-    const labels = pairs.map((p) => names[p.a] + " × " + names[p.b]).reverse();
+    const labels = pairs.map((p) => names[p.a] + " 与 " + names[p.b]).reverse();
     c.setOption({
-      textStyle: { color: "#c9d6f2" },
-      grid: { left: 8, right: 40, top: 8, bottom: 8, containLabel: true },
-      xAxis: { type: "value", splitLine: { show: false }, axisLabel: { color: "#8ea0c4" } },
-      yAxis: { type: "category", data: labels, axisLabel: { color: "#c9d6f2", fontSize: 10, width: 150, overflow: "truncate" } },
+      textStyle: { color: C.muted },
+      grid: { left: 8, right: 44, top: 4, bottom: 4, containLabel: true },
+      xAxis: { type: "value", splitLine: { show: false }, axisLabel: { color: C.muted, fontSize: 10 } },
+      yAxis: { type: "category", data: labels, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: C.ink, fontSize: 10.5, width: 170, overflow: "truncate" } },
       tooltip: {},
-      series: [{ type: "bar", data: pairs.map((p) => p.n).reverse(), itemStyle: { color: "#35d0ba", borderRadius: 4 }, barMaxWidth: 12,
-        label: { show: true, position: "right", color: "#8ea0c4", fontSize: 10 } }],
+      series: [{ type: "bar", data: pairs.map((p) => p.n).reverse(), itemStyle: { color: C.ink }, barMaxWidth: 8,
+        label: { show: true, position: "right", color: C.muted, fontSize: 10, fontFamily: "IBM Plex Mono, Menlo, monospace" } }],
     });
     window.addEventListener("resize", () => c.resize());
   });
